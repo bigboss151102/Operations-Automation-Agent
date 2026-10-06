@@ -1041,6 +1041,7 @@ Operations-Automation-Agent/
 │   │   ├── investigator.py      # build_investigator(): create_agent(READ_TOOLS, ToolStrategy(AgentProposal), limits)
 │   │   ├── nodes.py             # validate_input, investigate, guardrails, execute_actions, human_approval, respond
 │   │   ├── state.py             # OpsState (input, extracted IDs, proposal, decisions, actions, approvals, error)
+│   │   ├── responder.py         # build_response(): AnalyzeResponse from graph state (also while paused)
 │   │   └── service.py           # run_agent() / resume_agent(): shared by Streamlit and FastAPI
 │   │
 │   ├── common/
@@ -1082,7 +1083,7 @@ Operations-Automation-Agent/
 │   │   └── tickets.py           # find_tickets(): sample + created tickets (duplicate detection needs both)
 │   │
 │   ├── memory/                  # Agent memory only
-│   │   └── checkpointer.py      # LangGraph InMemorySaver (pause/resume for human approval)
+│   │   └── checkpointer.py      # LangGraph InMemorySaver with a serde allowlist of our state types (pause/resume)
 │   │
 │   ├── utils/
 │   │   ├── logging.py           # Structured logging + request_id
@@ -1125,7 +1126,7 @@ Layer responsibilities and allowed dependencies:
 | `tools` | Deterministic tool functions (read + simulated actions) | `repositories`, `common`, `utils` |
 | `guardrails` | Deterministic risk, severity, and authorization decisions | `common`, `utils` (pure functions over data) |
 | `repositories` | Sample data loading and in-memory action state | `common`, `config`, `utils` |
-| `memory` | Agent memory (LangGraph checkpointer) | — |
+| `memory` | Agent memory (LangGraph checkpointer) | `common` (state types for the serde allowlist) |
 | `common` | Shared Pydantic schemas and enums: no logic, no I/O | — (imports nothing from `src`) |
 
 `guardrails` and `tools` must never import `llm`. This keeps AI reasoning separate from deterministic business rules (see Section 11). Schemas used by more than one layer live in `common/schemas`, so layers never import each other just to share a model.

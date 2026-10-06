@@ -1,4 +1,8 @@
-"""The LLM's structured output. It recommends; it never decides severity, risk, or approval."""
+"""The LLM's structured output. It recommends; it never decides severity, risk, or approval.
+
+Every field is required (nullable fields must be sent as an explicit ``null``, lists as ``[]``).
+Models tend to skip optional fields; a required field makes the model decide about it every time.
+"""
 
 from pydantic import Field
 
@@ -17,28 +21,23 @@ class AgentProposal(Record):
     intent: Intent = Field(description="What the customer wants.")
     issue_type: IssueType = Field(description="The operational issue category.")
     requested_action: RequestedAction = Field(description="What the customer explicitly asked for.")
-    order_id: str | None = Field(
-        default=None, description="Order ID the customer wrote, or null. Never invent or guess one."
-    )
-    customer_id: str | None = Field(
-        default=None, description="Customer ID the customer wrote or a tool returned, or null."
-    )
+    order_id: str | None = Field(description="Order ID the customer wrote, or null. Never invent or guess one.")
+    customer_id: str | None = Field(description="Customer ID the customer wrote or a tool returned, or null.")
     issue_summary: str = Field(description="One or two sentences describing the issue, based on tool results.")
     evidence: list[str] = Field(
-        default_factory=list,
-        description="Facts from tool results that support the summary. Not the customer's own claims.",
+        description="Facts from tool results that support the summary. Not the customer's own claims. [] if none."
     )
     proposed_actions: list[ProposedAction] = Field(
-        default_factory=list, description="Recommended actions. Empty when information is missing or nothing is found."
+        description="Recommended actions. [] when information is missing or the record was not found."
     )
     missing_fields: list[str] = Field(
-        default_factory=list, description='Information needed but not provided, e.g. ["order_id"]. Empty if none.'
+        description='Information needed but not provided, e.g. ["order_id"]. [] if nothing is missing.'
     )
     clarification_question: str | None = Field(
-        default=None,
-        description="Required when missing_fields is non-empty: a short, polite question asking for exactly that.",
+        description="Required when missing_fields is non-empty: a short, polite question asking for exactly that. "
+        "Otherwise null."
     )
     customer_response_draft: str | None = Field(
-        default=None,
-        description="Draft reply to the customer following the example template. Null when information is missing.",
+        description="The complete reply draft following the example template. Required whenever "
+        "prepare_customer_response is proposed; null only when information is missing or nothing was found."
     )

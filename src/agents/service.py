@@ -1,0 +1,113 @@
+"""The single entry point used by Streamlit and FastAPI. Neither embeds graph logic.
+
+- ``run_agent(message, history)`` starts a request. It returns ``status="awaiting_approval"`` when a
+  refund is waiting for a human decision.
+- ``resume_agent(thread_id, decisions)`` records those decisions and finishes the run.
+
+The service is stateless per turn: for a clarification follow-up (decision D5) the client re-sends the
+earlier customer messages as ``history``.
+"""
+
+import logging
+import time
+from functools import cache
+from typing import Any
+from uuid import uuid4
+
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
+
+from src.agents.graph import build_graph
+from src.agents.investigator import PROMPT_VERSIONS
+from src.agents.responder import build_response, error_response
+from src.common.schemas import AnalyzeResponse, ApprovalRequest
+from src.config.settings import get_settings
+from src.llm.client import get_chat_model
+from src.memory.checkpointer import get_checkpointer
+from src.utils.logging import get_logger, log_event, set_request_id
+
+RECURSION_LIMIT = 25
+
+_log = get_logger("service")
+
+
+@cache
+def get_graph() -> CompiledStateGraph:  # type: ignore[type-arg]
+    settings = get_settings()
+    return build_graph(get_chat_model(settings), get_checkpointer(), high_value_threshold=settings.high_value_threshold)
+
+
+def _config(request_id: str) -> RunnableConfig:
+    return {
+        "configurable": {"thread_id": request_id},
+        "recursion_limit": RECURSION_LIMIT,
+        "run_name": "opspilot",
+        "tags": ["opspilot", get_settings().env],
+        "metadata": {"request_id": request_id, "prompt_versions": PROMPT_VERSIONS},
+    }
+
+
+def _to_response(graph: CompiledStateGraph, result: dict[str, Any], config: RunnableConfig) -> AnalyzeResponse:  # type: ignore[type-arg]
+    interrupts = result.get("__interrupt__")
+    if interrupts:  # paused in human_approval: the respond node has not run yet
+        pending = [ApprovalRequest.model_validate(a) for a in interrupts[0].value["approvals"]]
+        return build_response(graph.get_state(config).values, pending=pending)
+    response: AnalyzeResponse = result["response"]
+    return response
+
+
+def _finish(response: AnalyzeResponse, started: float) -> AnalyzeResponse:
+    log_event(
+        "request_completed",
+        status=response.status,
+        severity=response.severity,
+        duration_ms=round((time.perf_counter() - started) * 1000),
+        logger=_log,
+    )
+    return response
+
+
+def run_agent(
+    message: str,
+    history: list[str] | None = None,
+    *,
+    graph: CompiledStateGraph | None = None,  # type: ignore[type-arg]
+) -> AnalyzeResponse:
+    started = time.perf_counter()
+    request_id = f"req-{uuid4().hex[:8]}"
+    set_request_id(request_id)
+    graph = graph or get_graph()
+    config = _config(request_id)
+    try:
+        result = graph.invoke({"request_id": request_id, "message": message, "history": history or []}, config)
+        return _finish(_to_response(graph, result, config), started)
+    except Exception:
+        # OpenAI/network failures, recursion limit, bugs: fail safe. Actions run only in deterministic
+        # nodes after guardrails, so a failure before them means nothing was executed.
+        _log.exception("request_failed")
+        return _finish(error_response(request_id), started)
+
+
+def resume_agent(
+    thread_id: str,
+    decisions: dict[str, str],
+    *,
+    graph: CompiledStateGraph | None = None,  # type: ignore[type-arg]
+) -> AnalyzeResponse:
+    """Resume a paused run with ``{approval_id: "approve" | "reject"}``; missing decisions count as reject."""
+    started = time.perf_counter()
+    set_request_id(thread_id)
+    graph = graph or get_graph()
+    config = _config(thread_id)
+    try:
+        if not graph.get_state(config).next:
+            log_event("resume_rejected", reason="no_pending_approval", level=logging.WARNING, logger=_log)
+            return _finish(error_response(thread_id, "no_pending_approval"), started)
+        # Always wrap: LangGraph reads a dict whose keys all look like interrupt IDs (including an empty
+        # dict) as a per-interrupt resume map, which would leave the run paused.
+        result = graph.invoke(Command(resume={"decisions": decisions}), config)
+        return _finish(_to_response(graph, result, config), started)
+    except Exception:
+        _log.exception("resume_failed")
+        return _finish(error_response(thread_id), started)

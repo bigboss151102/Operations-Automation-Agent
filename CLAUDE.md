@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: Phases 1–5 done (setup; sample data + shared schemas; repositories + tools; deterministic guardrails; LLM investigator in `src/agents/investigator.py` with prompts in `src/prompts/`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
+Status: Phases 1–6 done: the full pipeline runs end to end via `src/agents/service.py` (`run_agent` / `resume_agent`). Remaining: Streamlit UI + REST API (Phase 7), README/observability (Phase 8). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
 
 ## Stack
 
@@ -59,6 +59,10 @@ Every instruction sent to the LLM is a Markdown file in `src/prompts/<name>.md`,
 - `src/.env` is a **directory**: secrets are in `src/.env/.env`, and the template is `src/.env/.env.example`. `get_settings()` loads it with `load_dotenv(ENV_FILE)`, where `ENV_FILE` is built from `__file__`, not the cwd. This is required because LangChain and LangSmith read `OPENAI_API_KEY` / `LANGSMITH_*` from the process environment, and pydantic-settings alone does not export them.
 - `.gitignore` ignores the whole `src/.env/` directory except `.env.example`, which must stay committed (spec deliverable).
 - Code before `interrupt()` re-runs when the graph resumes. Keep it idempotent.
+- Resume with `Command(resume={"decisions": {...}})`, always wrapped. LangGraph treats a dict whose keys all look like interrupt IDs (including `{}`) as a per-interrupt map, and the run stays paused.
+- Use `make_checkpointer()` / `get_checkpointer()`, never a bare `InMemorySaver()`. Its serde allowlists our state types; otherwise LangGraph warns (and will soon refuse) to deserialize them on resume.
+- `verified_ids_from(..., trusted_tools=...)`: never trust error tool messages or the structured-output `AgentProposal` tool message as sources of IDs.
+- Every `AgentProposal` field is required (explicit `null` / `[]`). Models skip optional fields.
 - `langgraph.prebuilt.create_react_agent` is legacy. Use `langchain.agents.create_agent`.
 - `GenericFakeChatModel.bind_tools` raises `NotImplementedError`. Tests use `FakeChatModel` from `test/fakes.py`, which overrides it; script model turns with `fake_model(...)` and `tool_call(...)`. Tests never call OpenAI or LangSmith (`LANGSMITH_TRACING=false`).
 - `.claude/` is gitignored, so project skills are not committed.

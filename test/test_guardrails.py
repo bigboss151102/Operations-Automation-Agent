@@ -75,6 +75,10 @@ def make_proposal(*actions: ActionName, **overrides: Any) -> AgentProposal:
         "order_id": "ORD-1007",
         "customer_id": "CUS-102",
         "issue_summary": "Order is delayed.",
+        "evidence": [],
+        "missing_fields": [],
+        "clarification_question": None,
+        "customer_response_draft": None,
         "proposed_actions": [ProposedAction(action=a, reason="test") for a in actions],
     }
     return AgentProposal(**(fields | overrides))

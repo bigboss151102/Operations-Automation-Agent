@@ -24,6 +24,8 @@ def _proposal_args(**overrides: Any) -> dict[str, Any]:
             {"action": "issue_refund", "reason": "Customer requested a refund."},
         ],
         "customer_response_draft": "Hi Alex, your refund request is being reviewed by our team.",
+        "missing_fields": [],
+        "clarification_question": None,
     }
     return args | overrides
 
@@ -98,3 +100,9 @@ def test_investigator_only_has_read_tools():
     assert attempt.status == "error"
     assert get_action_store().tickets == []
     assert result["structured_response"] is not None
+
+
+def test_every_proposal_field_is_required():
+    # Models skip optional fields; every key must be sent (null / [] when not applicable).
+    schema = AgentProposal.model_json_schema()
+    assert set(schema["required"]) == set(AgentProposal.model_fields)

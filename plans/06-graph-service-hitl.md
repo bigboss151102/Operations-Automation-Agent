@@ -36,7 +36,7 @@ Blocked actions (duplicate ticket) appear in `recommended_actions` with `executi
   1. Generate `request_id` (`req-<uuid8>`) and set the logging ContextVar.
   2. Invoke the graph with the config (`thread_id=request_id`, `recursion_limit=25`, `run_name`, `tags`, `metadata={request_id, prompt_versions}`).
   3. If the result has `__interrupt__`, return `status="awaiting_approval"`; otherwise return the `respond` output.
-- `resume_agent(thread_id, decisions: dict[approval_id, "approve" | "reject"])` → `Command(resume=decisions)` → final `AnalyzeResponse`.
+- `resume_agent(thread_id, decisions: dict[approval_id, "approve" | "reject"])` → `Command(resume={"decisions": decisions})` (always wrapped, see notes) → final `AnalyzeResponse`.
 - Catch-all: an unexpected exception (OpenAI error, recursion limit) returns `status="error"` with a safe message. No action has run at that point, and the exception is logged with `logger.exception`.
 - The compiled graph is built once (`get_graph()` cached). Streamlit additionally wraps it in `st.cache_resource` (Phase 7).
 
@@ -63,3 +63,16 @@ Blocked actions (duplicate ticket) appear in `recommended_actions` with `executi
 ## Out of scope
 
 UI/API (Phase 7).
+
+## Implementation notes
+
+- **Bug fix carried over from Phase 5:** `verified_ids_from` trusted every tool message. A middleware `UNVERIFIED_ID` error quotes the guessed ID, so retrying the same guess **passed** the middleware, and the structured-output `AgentProposal` tool message echoes the model's own IDs. Now error tool messages are never trusted, and the `investigate` node passes `trusted_tools=READ_TOOL_NAMES`. Regression test `test_retrying_a_blocked_id_is_still_blocked` fails on the old code.
+- **Resume value is wrapped** as `{"decisions": {...}}`. LangGraph treats a dict whose keys all look like interrupt-ID hashes as a per-interrupt resume map; `{}` qualifies, which left the run paused.
+- **Checkpointer serde allowlist** (`make_checkpointer()`): the default `InMemorySaver` logged 13 "Deserializing unregistered type … will be blocked in a future version" warnings per pause/resume; the allowlisted serde logs 0. Tests use the same checkpointer.
+- **`responder.build_response`** is shared by the `respond` node and the service while paused (the interrupt payload supplies the pending approvals).
+- `AnalyzeResponse` uses `approvals` (pending, approved, or rejected) plus `approval_required`, instead of `pending_approvals`, and adds `thread_id`, `severity_reasons`, and `draft_policy_violations`.
+- **Real-model run** (`gpt-4.1-mini`) of `run_agent()` on S1–S6 (+5b, + approve) found two LLM issues:
+  1. `AgentProposal.customer_response_draft` was optional and omitted in about half the runs. All proposal fields are now **required**, and the draft was present 6/6.
+  2. A "delivered but not received" order (ORD-1009) got no ticket/refund. Prompt v3 treats it as `missing_order` and always proposes `issue_refund` when a refund is asked for.
+
+  Final pass: every scenario returned the expected status; every approval led to `refund=ok`; every draft came from the LLM.

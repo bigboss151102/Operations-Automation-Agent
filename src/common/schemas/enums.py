@@ -131,6 +131,21 @@ class RuleId(StrEnum):
     UNKNOWN_ACTION = "unknown_action"
 
 
+class ResponseStatus(StrEnum):
+    """Final status of one request (spec §18); clients branch on it instead of parsing text."""
+
+    COMPLETED = "completed"
+    AWAITING_APPROVAL = "awaiting_approval"
+    NEEDS_MORE_INFO = "needs_more_info"
+    NOT_FOUND = "not_found"
+    ERROR = "error"
+
+
+class ApprovalDecision(StrEnum):
+    APPROVE = "approve"
+    REJECT = "reject"
+
+
 class GuardrailOutcome(StrEnum):
     """Whether the case may proceed to action execution at all."""
 
