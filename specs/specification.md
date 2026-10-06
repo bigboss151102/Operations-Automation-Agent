@@ -1047,7 +1047,9 @@ Operations-Automation-Agent/
 │   │   └── schemas/             # Pydantic models + enums shared across layers (no logic, no I/O)
 │   │       ├── __init__.py      # Re-exports the public schemas
 │   │       ├── enums.py         # OrderStatus, IssueType, TicketStatus, Severity, Execution, ...
+│   │       ├── ids.py           # Entity ID formats (ORD-\d+, CUS-\d+): the single definition
 │   │       ├── domain.py        # Order, Customer, SupportTicket, Subscription
+│   │       ├── actions.py       # OperationsNotification, CustomerDraft, ApprovalRequest, RefundRecord
 │   │       ├── proposal.py      # AgentProposal, ProposedAction (LLM structured output)
 │   │       ├── decisions.py     # Facts, GuardrailDecision (guardrails input/output)
 │   │       └── response.py      # AnalyzeResponse + nested models (shared by API and Streamlit)
@@ -1075,7 +1077,8 @@ Operations-Automation-Agent/
 │   │
 │   ├── repositories/            # Data access (repository pattern) — used by tools and guardrails node
 │   │   ├── data_store.py        # Loads data/*.json (read-only operational data)
-│   │   └── action_store.py      # In-memory store for created tickets, notifications, approval requests
+│   │   ├── action_store.py      # In-memory store for created tickets, notifications, approval requests
+│   │   └── tickets.py           # find_tickets(): sample + created tickets (duplicate detection needs both)
 │   │
 │   ├── memory/                  # Agent memory only
 │   │   └── checkpointer.py      # LangGraph InMemorySaver (pause/resume for human approval)
@@ -1083,6 +1086,7 @@ Operations-Automation-Agent/
 │   ├── utils/
 │   │   ├── logging.py           # Structured logging + request_id
 │   │   ├── ids.py               # ID regexes + extract_ids(text): shared by validate_input, tools, middleware
+│   │   ├── dates.py             # days_late(): shared by get_order and guardrails
 │   │   └── errors.py            # Error types and structured tool errors
 │   │
 │   └── web/

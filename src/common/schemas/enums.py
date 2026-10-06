@@ -52,3 +52,18 @@ class SubscriptionStatus(StrEnum):
 class SubscriptionPlan(StrEnum):
     BASIC = "basic"
     PREMIUM = "premium"
+
+
+class Severity(StrEnum):
+    """Issue severity (spec §13); computed only by deterministic guardrails."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ApprovalStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"

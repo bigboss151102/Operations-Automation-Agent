@@ -21,9 +21,16 @@ for _key, _value in _TEST_ENV.items():
 import pytest  # noqa: E402
 
 from src.config.settings import get_settings  # noqa: E402
+from src.repositories.action_store import get_action_store  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _fresh_settings() -> None:
     """Each test sees settings rebuilt from the current environment."""
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_action_store() -> None:
+    """Created tickets, approvals, and IDs never leak between tests."""
+    get_action_store().reset()

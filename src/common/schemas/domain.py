@@ -3,8 +3,9 @@
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
+from src.common.schemas._base import Record as _Record
 from src.common.schemas.enums import (
     IssueType,
     OrderStatus,
@@ -14,10 +15,6 @@ from src.common.schemas.enums import (
     TicketStatus,
 )
 from src.common.schemas.ids import CustomerId, OrderId, SubscriptionId, TicketId
-
-
-class _Record(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class Order(_Record):

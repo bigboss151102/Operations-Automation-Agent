@@ -18,6 +18,10 @@
 | `src/tools/actions.py` | `send_operations_notification`, `prepare_customer_response`, `request_human_approval`, plus approval-only `issue_refund` |
 | `src/tools/registry.py` | `READ_TOOLS`, `ACTION_TOOLS`, `APPROVAL_ONLY_ACTIONS` |
 | `test/test_tools.py` | Tool tests (spec Tests 1–2) |
+| *(added during implementation)* `src/common/schemas/actions.py` | `OperationsNotification`, `CustomerDraft`, `ApprovalRequest`, `RefundRecord`; `Severity` + `ApprovalStatus` enums |
+| *(added)* `src/utils/dates.py` | `days_late(expected, actual, on)`, shared by `get_order` and the guardrails (Phase 4) |
+| *(added)* `src/repositories/tickets.py` | `find_tickets()`: sample tickets plus tickets created in this process |
+| *(added)* `test/test_ids.py` | ID extraction, `verified_ids_from`, `days_late` |
 
 ## Design
 
@@ -45,9 +49,9 @@ Error codes: `ORDER_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `SUBSCRIPTION_NOT_FOUND`, 
   - It does **not** generate text. The LLM wrote `draft` from the example template.
   - It does **not** check policy either. The `execute_actions` node runs `check_customer_draft` (Phase 4) first and passes the final text, so `tools` never imports `guardrails`.
   - It stores the draft and returns `{"success": true, "draft_id": "DRF-…", "draft": "..."}`.
-  - It also exposes `fallback_customer_draft(customer_name, issue_summary)`, a short deterministic text used when the LLM's draft is missing or violates policy: "Hi {name}, thank you for contacting us about {issue}. Our team is reviewing your request and will get back to you shortly."
+  - It also exposes `fallback_customer_draft(customer_name, order_id=None)`, a short deterministic text used when the LLM's draft is missing or violates policy: "Hi {first name}, thank you for contacting us about your order {order_id}. Our team is reviewing it and will get back to you shortly." It deliberately includes **no LLM-written text** (such as the issue summary, which may itself say "refund"), so the fallback can never violate the policy it replaces.
 - `request_human_approval(action, reason, context)` → `{"approval_id": "APR-…", "status": "pending", ...}`. It is **idempotent** per `(request_id, action)` (Phase 6 resumes re-run nodes).
-- `issue_refund(order_id, amount)` is simulated, logs `[SIMULATED REFUND]`, and is callable **only** after approval. It is the sole entry in `APPROVAL_ONLY_ACTIONS` (D2), not in `ACTION_TOOLS`.
+- `issue_refund(order_id, amount, approval_id)` is simulated, logs `[SIMULATED REFUND]`, and is callable **only** after approval. It enforces this itself, as defense in depth: it refuses (`REFUND_NOT_APPROVED`) unless `approval_id` is an **approved** `issue_refund` request for the same order, and it caps the amount at the order total. It is the sole entry in `APPROVAL_ONLY_ACTIONS` (D2), not in `ACTION_TOOLS`.
 - There is **no** `send_customer_message` tool. The agent only drafts replies (spec Rule 3), so sending is not something the system can do.
 
 ## Tasks
