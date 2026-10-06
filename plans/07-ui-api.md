@@ -53,7 +53,7 @@ Implementation notes:
 - `test_unexpected_error_returns_safe_envelope` → 500, no stack trace in the body
 - `test_healthz`
 
-Streamlit is verified manually (below), not with automated tests.
+Streamlit is also covered automatically with `streamlit.testing.v1.AppTest` (`test/test_web.py`): page render, scenario prefill, Approve/Reject callbacks, the clarification reply carrying `history`, and reset. The service functions are faked, so no LLM is called.
 
 ## Acceptance criteria
 
@@ -67,3 +67,15 @@ Streamlit is verified manually (below), not with automated tests.
 ## Out of scope
 
 Visual polish, auth, an approval API endpoint.
+
+## Implementation notes
+
+- Every widget change goes through an `on_click` callback (`_use_scenario`, `_analyze`, `_decide`, `_reset_demo`), so session state is updated before Streamlit reruns the script.
+- `_graph()` wraps `get_graph()` in `st.cache_resource`: one compiled graph and checkpointer per process, so a paused approval survives reruns.
+- Streamlit 1.65: `width="stretch"` replaces the deprecated `use_container_width=True`.
+- API: `AnalyzeRequest` strips whitespace, enforces 1–2000 chars per message and at most 10 history turns, and forbids extra fields (422). A global exception handler returns the safe `{"error": {code, message, request_id}}` envelope with no stack trace (tested with a secret-looking string).
+- `AppTest.from_file()` resolves relative paths against the **calling file**, not the cwd; scripts outside `test/` must pass an absolute path.
+- **Real-model verification:**
+  - `curl` ORD-9999 → `not_found`; refund → `awaiting_approval`; empty body → 422; `/docs` 200.
+  - Streamlit boots headless (`/_stcore/health` ok).
+  - An AppTest run against the **real** service and model passed: S2 → Approve → `issue_refund` executed; S3 shows ⛔ blocked ticket; S4 not found with no tables; S5 chat question → reply "It's ORD-1007." → awaiting approval. No exceptions.
