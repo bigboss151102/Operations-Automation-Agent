@@ -267,12 +267,15 @@ guardrails  (deterministic: severity, Rules 1–7, per-action       │
   ▼                                                               │
 execute_actions  (auto actions only:                              │
                   create_support_ticket,                          │
-                  send_operations_notification,                   │
                   prepare_customer_response)                      │
   │                                                               │
   ▼                                                               │
-human_approval  (request_human_approval + interrupt()             │
-                 when any action needs approval)                  │
+notify_operations  (request_human_approval for refunds, then the  │
+                    full report to Slack if allowed; Phase 9)     │
+  │                                                               │
+  ▼                                                               │
+human_approval  (interrupt() when an approval is pending;         │
+                 decision replied in the Slack thread)            │
   │                                                               │
   ▼                                                               │
 respond  (assemble final structured response) ◄───────────────────┘
@@ -286,13 +289,14 @@ END
 | `validate_input` | Deterministic | Check the request is non-empty and within the length limit, and extract IDs (`ORD-…`, `CUS-…`) with a regex. Only malformed input (empty or too long) goes straight to `respond`. A request **without IDs still goes to the LLM**, which asks the user for what is missing (Rule 5). |
 | `investigate` | LLM | A `create_agent` that may call only **read-only** tools and must return an `AgentProposal` (intent, IDs, issue summary, evidence, proposed actions, draft customer response), validated by Pydantic. Guardrail middleware runs inside the agent loop: `VerifiedIdMiddleware` blocks lookups of IDs the customer never wrote, `PIIMiddleware` redacts emails from tool results, and `ModelCallLimitMiddleware` / `ToolCallLimitMiddleware` cap the loop. |
 | `guardrails` | Deterministic | Compute severity, apply Rules 1–7, and decide per proposed action whether it runs automatically, needs approval, or is blocked. |
-| `execute_actions` | Deterministic | Run only the actions that `guardrails` approved for automatic execution. |
-| `human_approval` | Deterministic + HITL | Create approval requests and pause the graph with LangGraph `interrupt()`. The run resumes with the reviewer's decision (approve / reject), and approved actions are simulated. |
+| `execute_actions` | Deterministic | Run the automatic actions approved by `guardrails`: ticket and reply draft (R8-checked). |
+| `notify_operations` | Deterministic | Create the approval requests (refunds), then, if `guardrails` allowed `send_operations_notification`, post the full case report to the operations channel (Slack, or simulated). It completes before the graph pauses, so resuming never re-posts. |
+| `human_approval` | Deterministic + HITL | Pause the graph with LangGraph `interrupt()` while an approval is pending. The run resumes with the reviewer's decision (approve / reject) from the Operation Admin page; approved refunds are simulated; the decision is replied in the report's Slack thread. |
 | `respond` | Deterministic | Build the final structured output (Section 14). |
 
 Key rules:
 
-* **The LLM never calls action tools.** Action tools (`create_support_ticket`, `send_operations_notification`, `request_human_approval`, and the simulated `issue_refund`, the only action that needs approval) are not given to `create_agent`. Only `execute_actions` and `human_approval` call them, after `guardrails` has decided.
+* **The LLM never calls action tools.** Action tools (`create_support_ticket`, `send_operations_notification`, `request_human_approval`, and the simulated `issue_refund`, the only action that needs approval) are not given to `create_agent`. Only `execute_actions`, `notify_operations`, and `human_approval` call them, after `guardrails` has decided.
 * `AgentProposal` contains no severity, risk, or approval fields. Those are computed only by `guardrails`.
 * If `investigate` produces no valid `AgentProposal` (validation error or call limit reached), the graph goes to `respond` with a safe error. No action is executed.
 * Human-in-the-loop uses LangGraph `interrupt()` in the `human_approval` node, with a checkpointer (`InMemorySaver`) and a `thread_id` per request, so a paused run can be resumed after the approval decision. `HumanInTheLoopMiddleware` is not used: it only gates tool calls the LLM makes, while approval here is decided by deterministic rules.
@@ -404,17 +408,12 @@ Example:
 ## Tool 6 — send_operations_notification
 
 ```text
-send_operations_notification(
-    severity,
-    summary,
-    order_id,
-    recommended_action
-)
+send_operations_notification(report)
 ```
 
-Do NOT send a real Slack message.
+~~Do NOT send a real Slack message.~~ **Changed in Phase 9 (decision D7):** the tool posts the **full case report** (severity, reasons, summary, evidence, guardrail decisions, executed actions, approval status, the customer reply, `request_id`) to a Slack channel and tags the configured people (`SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID`, `SLACK_MENTION_USER_IDS`). Slack is **optional**: without configuration the notification is simulated in the log as before, so tests and fresh clones never need Slack. A Slack failure never fails the request; it is recorded as a failed action.
 
-Simulate the action by logging the notification or storing it locally.
+Simulated output when Slack is not configured:
 
 Example:
 
@@ -573,7 +572,9 @@ send_customer_message()
 
 unless explicitly approved by a human.
 
-**Implementation decision (D2):** OpsPilot has no `send_customer_message` capability at all. It only produces a draft (labelled *draft — not sent*) for a human to send through their usual channel. If the LLM proposes sending a message, guardrails block it (`external_communication_blocked`).
+**Changed in Phase 9 (decision D6):** customers now talk to OpsPilot through a chat UI, and the chatbot **shows the reply draft to the customer** after the deterministic R8 content policy (no refund or compensation promises, no internal details; a violating draft is replaced by a safe fallback). OpsPilot still has no separate `send_customer_message` action.
+
+**Original implementation decision (D2):** OpsPilot has no `send_customer_message` capability at all. It only produces a draft (labelled *draft — not sent*) for a human to send through their usual channel. If the LLM proposes sending a message, guardrails block it (`external_communication_blocked`).
 
 ---
 
@@ -958,13 +959,12 @@ Keep the UI extremely simple.
 
 ## 18.1 Demo UI — Streamlit
 
-The demo UI is a single **Streamlit** page (`src/web/app.py`). It should:
+**Updated in Phase 9 (decisions D6, D8).** The Streamlit app (`src/web/app.py`) has two pages:
 
-* Provide a text area for the customer request and a submit button.
-* Show the structured result: issue summary, severity, evidence, recommended actions, and the draft customer response.
-* Show executed actions and guardrail decisions, so the demo can explain *why* something was or wasn't done.
-* Show pending approvals with **Approve / Reject** buttons that resume the paused LangGraph run.
-* When the agent asks for missing information (`needs_more_info`), show its question and let the user reply in place. The reply is sent with the conversation history.
+* **Chat** (`src/web/views/chat.py`, customers): a chatbot. The customer describes the issue; the bot replies conversationally with the clarification question (missing information), the not-found / error message, or the R8-checked reply draft. Customers never see severity, rules, or approval buttons. While a clarification is open, the reply is sent with the earlier messages as `history`.
+* **Operation Admin** (`src/web/views/admin.py`, operations): every case (pending approvals first) with the full analysis (severity, evidence, guardrail decisions, executed actions, Slack delivery, reply draft) and **Approve / Reject** buttons that resume the paused LangGraph run.
+
+Cases are kept in an in-memory case store shared by all sessions, so an admin tab sees conversations from any chat tab. The operations team is notified in Slack (Tool 6), tagged, and sees each refund decision as a thread reply.
 
 Implementation notes:
 
@@ -1080,7 +1080,8 @@ Operations-Automation-Agent/
 │   ├── repositories/            # Data access (repository pattern) — used by tools and guardrails node
 │   │   ├── data_store.py        # Loads data/*.json (read-only operational data)
 │   │   ├── action_store.py      # In-memory store for created tickets, notifications, approval requests
-│   │   └── tickets.py           # find_tickets(): sample + created tickets (duplicate detection needs both)
+│   │   ├── tickets.py           # find_tickets(): sample + created tickets (duplicate detection needs both)
+│   │   └── case_store.py        # In-memory customer cases for the Operation Admin page (Phase 9)
 │   │
 │   ├── memory/                  # Agent memory only
 │   │   └── checkpointer.py      # LangGraph InMemorySaver with a serde allowlist of our state types (pause/resume)
@@ -1091,8 +1092,16 @@ Operations-Automation-Agent/
 │   │   ├── dates.py             # days_late(): shared by get_order and guardrails
 │   │   └── errors.py            # Error types and structured tool errors
 │   │
+│   ├── integrations/            # Outbound integrations (Phase 9)
+│   │   ├── slack.py             # Notifier: SlackNotifier (chat.postMessage + thread replies) / LogNotifier (simulated)
+│   │   └── slack_report.py      # OperationsReport → Slack Block Kit (pure)
+│   │
 │   └── web/
-│       └── app.py               # Streamlit demo UI: submit request, show result, approve / reject
+│       ├── app.py               # Streamlit entry: st.navigation with the two pages
+│       ├── components.py        # Cached graph, demo scenarios, case report view
+│       └── views/
+│           ├── chat.py          # Customer chatbot (D6)
+│           └── admin.py         # Operation Admin: cases + refund approvals (D8)
 │
 ├── data/
 │   ├── orders.json
@@ -1123,7 +1132,8 @@ Layer responsibilities and allowed dependencies:
 | `agents` | LangGraph graph: LLM reasoning, tool calls, guardrails, execution, approval | `llm`, `tools`, `guardrails`, `repositories`, `memory`, `prompts`, `common`, `config`, `utils` |
 | `llm` | Chat model factory (`init_chat_model`) | `config`, `utils` |
 | `prompts` | Prompt `.md` files + loader | — |
-| `tools` | Deterministic tool functions (read + simulated actions) | `repositories`, `common`, `utils` |
+| `tools` | Deterministic tool functions (read + actions) | `repositories`, `integrations`, `common`, `config`, `utils` |
+| `integrations` | Slack notifier and report rendering | `common`, `config`, `utils` |
 | `guardrails` | Deterministic risk, severity, and authorization decisions | `common`, `utils` (pure functions over data) |
 | `repositories` | Sample data loading and in-memory action state | `common`, `config`, `utils` |
 | `memory` | Agent memory (LangGraph checkpointer) | `common` (state types for the serde allowlist) |
@@ -1504,7 +1514,7 @@ Do NOT spend significant time on:
 * Cloud deployment
 * Kubernetes
 * Terraform
-* Real Slack integration
+* Real Slack integration (added later as an optional extension in Phase 9, decision D7)
 * Complex databases
 * Advanced frontend
 * Multi-agent architecture

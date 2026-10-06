@@ -26,14 +26,17 @@ from src.common.schemas import (
     Facts,
     GuardrailOutcome,
     GuardrailResult,
+    NotificationResult,
+    OperationsReport,
     Order,
     PolicyViolation,
     RuleId,
-    Severity,
 )
-from src.config.settings import today
+from src.config.settings import get_settings, today
 from src.guardrails.draft_policy import check_customer_draft
 from src.guardrails.rules import evaluate
+from src.integrations.slack import get_notifier
+from src.integrations.slack_report import decision_reply_text
 from src.repositories.action_store import get_action_store
 from src.repositories.data_store import get_data_store
 from src.repositories.tickets import find_tickets
@@ -203,13 +206,13 @@ class OpsNodes:
         return "Investigate and follow up with the customer."
 
     def execute_actions(self, state: OpsState) -> dict[str, Any]:
+        """Run the automatic actions: ticket and reply draft. The ops notification runs in notify_operations."""
         result, proposal = state["guardrails"], state["proposal"]
         if result is None or proposal is None:  # unreachable: routing only sends proceeding cases here
             return {}
         order, customer = self._records(proposal)
         customer_id = customer.customer_id if customer else proposal.customer_id
         order_id = order.order_id if order else None
-        notification_severity = Severity.CRITICAL if RuleId.HIGH_VALUE_ORDER in result.case_rules else result.severity
 
         executed = list(state.get("executed_actions", []))
         final_draft: str | None = None
@@ -228,16 +231,6 @@ class OpsNodes:
                     }
                 )
                 executed.append(_executed(decision.action, output, "ticket_id"))
-            elif decision.action == ActionName.SEND_OPERATIONS_NOTIFICATION:
-                output = send_operations_notification.invoke(
-                    {
-                        "severity": notification_severity,
-                        "summary": proposal.issue_summary,
-                        "order_id": order_id,
-                        "recommended_action": self._ops_recommendation(result),
-                    }
-                )
-                executed.append(_executed(decision.action, output, "notification_id"))
             elif decision.action == ActionName.PREPARE_CUSTOMER_RESPONSE:
                 violations = check_customer_draft(proposal.customer_response_draft)  # R8
                 final_draft = proposal.customer_response_draft if not violations else None
@@ -264,22 +257,18 @@ class OpsNodes:
                 executed.append(_executed(decision.action, output, "draft_id"))
         return {"executed_actions": executed, "customer_response": final_draft, "draft_violations": violations}
 
-    # --- human_approval (pauses the graph; refunds only, decision D2) -----------------------
+    # --- notify_operations (deterministic; creates approvals, then reports to Slack) --------
 
-    def human_approval(self, state: OpsState) -> dict[str, Any]:
-        result, proposal = state["guardrails"], state["proposal"]
-        if result is None or proposal is None:
-            return {}
-        pending = [d for d in result.decisions if d.execution is Execution.HUMAN_APPROVAL]
-        if not pending:
-            return {}
-        order, customer = self._records(proposal)
+    def _request_approvals(
+        self, state: OpsState, result: GuardrailResult, order: Order | None, customer: Customer | None
+    ) -> list[ApprovalRequest]:
+        """Create the approval requests (refunds only, decision D2). Idempotent per (request_id, action)."""
         request_id = state["request_id"]
         actions = get_action_store()
-
-        # This code re-runs from the top when the graph resumes: request_human_approval is idempotent.
         approvals: list[ApprovalRequest] = []
-        for decision in pending:
+        for decision in result.decisions:
+            if decision.execution is not Execution.HUMAN_APPROVAL:
+                continue
             is_new = actions.find_approval(request_id, decision.action) is None
             output = request_human_approval.invoke(
                 {
@@ -299,9 +288,68 @@ class OpsNodes:
             approvals.append(approval)
             if is_new:
                 log_event("approval_requested", approval_id=approval.approval_id, action=approval.action, logger=_log)
+        return approvals
 
-        answer = interrupt({"request_id": request_id, "approvals": [a.model_dump(mode="json") for a in approvals]})
+    def notify_operations(self, state: OpsState) -> dict[str, Any]:
+        """Create pending approvals, then post the full case report when guardrails allow the notification.
 
+        Runs to completion before human_approval pauses the graph, so resuming never re-posts the report.
+        """
+        result, proposal = state["guardrails"], state["proposal"]
+        if result is None or proposal is None or result.severity is None:  # unreachable for proceeding cases
+            return {}
+        order, customer = self._records(proposal)
+        approvals = self._request_approvals(state, result, order, customer)
+        update: dict[str, Any] = {"pending_approvals": approvals}
+
+        allowed = any(
+            d.action == ActionName.SEND_OPERATIONS_NOTIFICATION and d.execution is Execution.AUTOMATIC
+            for d in result.decisions
+        )
+        if not allowed:
+            return update
+
+        report = OperationsReport(
+            request_id=state["request_id"],
+            severity=result.severity,
+            severity_reasons=list(result.severity_reasons),
+            high_value=RuleId.HIGH_VALUE_ORDER in result.case_rules,
+            intent=proposal.intent,
+            order_id=order.order_id if order else proposal.order_id,
+            customer_id=customer.customer_id if customer else proposal.customer_id,
+            customer_name=customer.name if customer else None,
+            issue_summary=proposal.issue_summary,
+            evidence=list(proposal.evidence),
+            decisions=list(result.decisions),
+            executed_actions=list(state.get("executed_actions", [])),
+            approvals=approvals,
+            customer_response=state.get("customer_response"),
+            draft_policy_violations=list(state.get("draft_violations", [])),
+            recommended_action=self._ops_recommendation(result),
+            mentions=get_settings().slack_mentions,
+        )
+        output = send_operations_notification.invoke({"report": report})
+        delivery = (
+            NotificationResult.model_validate(output["delivery"])
+            if output.get("success")
+            else NotificationResult(delivered=False, error=output.get("message"))
+        )
+        notified = _executed(ActionName.SEND_OPERATIONS_NOTIFICATION, output, "notification_id")
+        executed = [*state.get("executed_actions", []), notified]
+        return {**update, "executed_actions": executed, "notification": delivery}
+
+    # --- human_approval (pauses the graph; refunds only, decision D2) -----------------------
+
+    def human_approval(self, state: OpsState) -> dict[str, Any]:
+        # This node re-runs from the top when the graph resumes: nothing before interrupt() has side effects.
+        approvals = state.get("pending_approvals", [])
+        if not approvals:
+            return {}
+        answer = interrupt(
+            {"request_id": state["request_id"], "approvals": [a.model_dump(mode="json") for a in approvals]}
+        )
+
+        actions = get_action_store()
         executed = list(state.get("executed_actions", []))
         decided: list[ApprovalRequest] = []
         for approval in approvals:
@@ -310,6 +358,7 @@ class OpsNodes:
             decided_approval = actions.decide_approval(approval.approval_id, status)
             decided.append(decided_approval)
             log_event("approval_decided", approval_id=approval.approval_id, decision=status, logger=_log)
+            refund_id: str | None = None
             if status is ApprovalStatus.APPROVED and approval.action == ActionName.ISSUE_REFUND:
                 output = issue_refund.invoke(
                     {
@@ -318,8 +367,19 @@ class OpsNodes:
                         "approval_id": approval.approval_id,
                     }
                 )
-                executed.append(_executed(approval.action, output, "refund_id"))
+                refund = _executed(approval.action, output, "refund_id")
+                executed.append(refund)
+                refund_id = refund.result_id
+            self._reply_in_thread(state, decision_reply_text(decided_approval, refund_id))
         return {"approvals": decided, "executed_actions": executed}
+
+    @staticmethod
+    def _reply_in_thread(state: OpsState, text: str) -> None:
+        """Post an approval decision under the original report (Slack thread, or the simulated log)."""
+        notification = state.get("notification")
+        if notification is None or not (notification.ts or notification.simulated):
+            return  # no report was sent (or it failed): nothing to reply to
+        get_notifier().reply(notification.channel or "", notification.ts or "", text)
 
     @staticmethod
     def _decision_for(answer: Any, approval_id: str) -> ApprovalDecision:

@@ -2,6 +2,7 @@
 
 from src.common.schemas.actions import ApprovalRequest, CustomerDraft, OperationsNotification, RefundRecord
 from src.common.schemas.decisions import Facts, GuardrailDecision, GuardrailResult, PolicyViolation, SeverityResult
+from src.common.schemas.delivery import NotificationResult
 from src.common.schemas.domain import Customer, Order, Subscription, SupportTicket
 from src.common.schemas.enums import (
     ACTIVE_TICKET_STATUSES,
@@ -34,6 +35,7 @@ from src.common.schemas.ids import (
     SubscriptionId,
     TicketId,
 )
+from src.common.schemas.notifications import CaseRecord, OperationsReport
 from src.common.schemas.proposal import AgentProposal, ProposedAction
 from src.common.schemas.response import AnalyzeResponse, ExecutedAction
 
@@ -50,6 +52,7 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalRequest",
     "ApprovalStatus",
+    "CaseRecord",
     "Customer",
     "CustomerDraft",
     "CustomerId",
@@ -61,7 +64,9 @@ __all__ = [
     "GuardrailResult",
     "Intent",
     "IssueType",
+    "NotificationResult",
     "OperationsNotification",
+    "OperationsReport",
     "Order",
     "OrderId",
     "OrderStatus",

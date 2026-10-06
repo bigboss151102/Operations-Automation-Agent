@@ -16,6 +16,7 @@ Total budget: **~3.5–4 hours** (spec §27: 2–4 h). Each phase ends with test
 | 6 | Graph, service & human approval | [06-graph-service-hitl.md](06-graph-service-hitl.md) | 40 min | 4, 5 | ✅ |
 | 7 | Streamlit UI & REST API | [07-ui-api.md](07-ui-api.md) | 30 min | 6 | ✅ |
 | 8 | Observability, README & demo | [08-observability-readme-demo.md](08-observability-readme-demo.md) | 30 min | 7 | ✅ |
+| 9 | Customer chatbot, Operation Admin & Slack | [09-chatbot-admin-slack.md](09-chatbot-admin-slack.md) | ~2 h | 8 | ✅ |
 
 Phases 4 and 5 are independent and can be done in either order.
 

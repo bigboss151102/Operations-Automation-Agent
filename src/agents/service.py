@@ -3,6 +3,9 @@
 - ``run_agent(message, history)`` starts a request. It returns ``status="awaiting_approval"`` when a
   refund is waiting for a human decision.
 - ``resume_agent(thread_id, decisions)`` records those decisions and finishes the run.
+- ``list_cases`` / ``pending_cases`` / ``reset_demo_data`` serve the Operation Admin page.
+
+Every result is saved in the case store, so the admin page sees cases created from the chat.
 
 The service is stateless per turn: for a clarification follow-up (decision D5) the client re-sends the
 earlier customer messages as ``history``.
@@ -21,10 +24,12 @@ from langgraph.types import Command
 from src.agents.graph import build_graph
 from src.agents.investigator import PROMPT_VERSIONS
 from src.agents.responder import build_response, error_response
-from src.common.schemas import AnalyzeResponse, ApprovalRequest
+from src.common.schemas import AnalyzeResponse, CaseRecord
 from src.config.settings import get_settings
 from src.llm.client import get_chat_model
 from src.memory.checkpointer import get_checkpointer
+from src.repositories.action_store import get_action_store
+from src.repositories.case_store import get_case_store
 from src.utils.logging import get_logger, log_event, set_request_id
 
 RECURSION_LIMIT = 25
@@ -49,10 +54,8 @@ def _config(request_id: str) -> RunnableConfig:
 
 
 def _to_response(graph: CompiledStateGraph, result: dict[str, Any], config: RunnableConfig) -> AnalyzeResponse:  # type: ignore[type-arg]
-    interrupts = result.get("__interrupt__")
-    if interrupts:  # paused in human_approval: the respond node has not run yet
-        pending = [ApprovalRequest.model_validate(a) for a in interrupts[0].value["approvals"]]
-        return build_response(graph.get_state(config).values, pending=pending)
+    if result.get("__interrupt__"):  # paused in human_approval: the respond node has not run yet
+        return build_response(graph.get_state(config).values)
     response: AnalyzeResponse = result["response"]
     return response
 
@@ -81,12 +84,14 @@ def run_agent(
     config = _config(request_id)
     try:
         result = graph.invoke({"request_id": request_id, "message": message, "history": history or []}, config)
-        return _finish(_to_response(graph, result, config), started)
+        response = _to_response(graph, result, config)
     except Exception:
         # OpenAI/network failures, recursion limit, bugs: fail safe. Actions run only in deterministic
         # nodes after guardrails, so a failure before them means nothing was executed.
         _log.exception("request_failed")
-        return _finish(error_response(request_id), started)
+        response = error_response(request_id)
+    get_case_store().save(response, customer_messages=[*(history or []), message])
+    return _finish(response, started)
 
 
 def resume_agent(
@@ -107,7 +112,28 @@ def resume_agent(
         # Always wrap: LangGraph reads a dict whose keys all look like interrupt IDs (including an empty
         # dict) as a per-interrupt resume map, which would leave the run paused.
         result = graph.invoke(Command(resume={"decisions": decisions}), config)
-        return _finish(_to_response(graph, result, config), started)
+        response = _to_response(graph, result, config)
     except Exception:
         _log.exception("resume_failed")
         return _finish(error_response(thread_id), started)
+    get_case_store().save(response)  # keeps the customer messages recorded by run_agent
+    return _finish(response, started)
+
+
+# --- read side for the Operation Admin page (decision D8) ---------------------------------
+
+
+def list_cases() -> list[CaseRecord]:
+    """All cases, most recently updated first."""
+    return get_case_store().all()
+
+
+def pending_cases() -> list[CaseRecord]:
+    """Cases with a refund waiting for a human decision."""
+    return [case for case in get_case_store().all() if case.response.approval_required]
+
+
+def reset_demo_data() -> None:
+    """Forget created tickets, approvals, refunds, and cases (sample data in data/ is untouched)."""
+    get_action_store().reset()
+    get_case_store().reset()

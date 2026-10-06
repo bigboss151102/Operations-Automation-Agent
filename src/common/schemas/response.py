@@ -5,6 +5,7 @@ from pydantic import Field
 from src.common.schemas._base import Record
 from src.common.schemas.actions import ApprovalRequest
 from src.common.schemas.decisions import GuardrailDecision, PolicyViolation
+from src.common.schemas.delivery import NotificationResult
 from src.common.schemas.enums import Intent, ResponseStatus, Severity
 
 
@@ -35,5 +36,8 @@ class AnalyzeResponse(Record):
     executed_actions: list[ExecutedAction] = Field(default_factory=list)
     approvals: list[ApprovalRequest] = Field(default_factory=list)  # pending, approved, or rejected
     approval_required: bool = False  # True while any approval is pending
-    customer_response: str | None = Field(default=None, description="Reply draft. Never sent automatically.")
+    customer_response: str | None = Field(
+        default=None, description="Reply draft (R8-checked). The chatbot shows it to the customer (decision D6)."
+    )
     draft_policy_violations: list[PolicyViolation] = Field(default_factory=list)  # R8: LLM draft was replaced
+    notification: NotificationResult | None = None  # operations alert (Slack or simulated), if one was sent

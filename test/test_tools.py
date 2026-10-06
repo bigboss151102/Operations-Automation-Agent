@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+from fakes import FakeNotifier
 
-from src.common.schemas import ApprovalStatus, IssueType, Severity, TicketPriority, TicketStatus
+from src.common.schemas import ApprovalStatus, IssueType, OperationsReport, Severity, TicketPriority, TicketStatus
+from src.integrations.slack import set_notifier
 from src.repositories.action_store import get_action_store
 from src.tools.actions import (
     fallback_customer_draft,
@@ -99,17 +101,52 @@ def test_create_support_ticket_validates_ownership():
     assert get_action_store().tickets == []
 
 
-def test_send_operations_notification_is_stored():
-    result = send_operations_notification.invoke(
-        {
-            "severity": Severity.HIGH,
-            "summary": "Order ORD-1007 has been delayed for 15 days.",
-            "order_id": "ORD-1007",
-            "recommended_action": "Review refund request.",
-        }
-    )
-    assert result == {"success": True, "notification_id": "NTF-0001", "channel": "#operations-alerts"}
-    assert get_action_store().notifications[0].severity is Severity.HIGH
+def _report(**overrides):
+    fields = {
+        "request_id": "req-1",
+        "severity": Severity.HIGH,
+        "order_id": "ORD-1007",
+        "issue_summary": "Order ORD-1007 has been delayed for 15 days.",
+        "recommended_action": "Review the pending refund approval.",
+    }
+    return OperationsReport(**(fields | overrides))
+
+
+def test_send_operations_notification_is_simulated_without_slack():
+    result = send_operations_notification.invoke({"report": _report()})
+    assert result["success"] is True
+    assert result["notification_id"] == "NTF-0001"
+    assert result["delivery"]["simulated"] is True
+    stored = get_action_store().notifications[0]
+    assert stored.severity is Severity.HIGH
+    assert stored.delivery is not None
+    assert stored.delivery.simulated is True
+
+
+def test_send_operations_notification_posts_to_the_configured_notifier():
+    notifier = FakeNotifier()
+    set_notifier(notifier)
+    result = send_operations_notification.invoke({"report": _report(high_value=True)})
+    assert result["delivery"] == {
+        "delivered": True,
+        "simulated": False,
+        "channel": "C0TEST",
+        "ts": "1.000100",
+        "error": None,
+    }
+    assert notifier.posts[0].order_id == "ORD-1007"
+    assert get_action_store().notifications[0].severity is Severity.CRITICAL  # R2 escalation
+
+
+def test_send_operations_notification_reports_slack_failure_without_raising():
+    set_notifier(FakeNotifier(fail=True))
+    result = send_operations_notification.invoke({"report": _report()})
+    assert result == {
+        "success": False,
+        "error": "NOTIFICATION_FAILED",
+        "message": "SLACK_ERROR: channel_not_found",
+    }
+    assert get_action_store().notifications[0].delivery.delivered is False  # still recorded for the audit trail
 
 
 def test_prepare_customer_response_stores_draft_unchanged():

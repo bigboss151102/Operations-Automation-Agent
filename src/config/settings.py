@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     data_dir: Path = SRC_DIR.parent / "data"
     log_level: str = "INFO"
 
+    # Slack (optional, decision D7). Without a token + channel, notifications are simulated in the log.
+    slack_bot_token: SecretStr | None = None
+    slack_channel_id: str | None = None
+    slack_mention_user_ids: str = ""  # comma-separated member IDs tagged on every report, e.g. "U0123,U0456"
+    slack_timeout_s: int = 10
+
+    @property
+    def slack_enabled(self) -> bool:
+        return self.slack_bot_token is not None and bool(self.slack_channel_id)
+
+    @property
+    def slack_mentions(self) -> list[str]:
+        return [user_id.strip() for user_id in self.slack_mention_user_ids.split(",") if user_id.strip()]
+
 
 def _env_file() -> Path | None:
     """The env file to read, or None when disabled (tests set ``OPSPILOT_IGNORE_ENV_FILE=1``)."""

@@ -1,7 +1,7 @@
 """The outer LangGraph pipeline (spec §9.2).
 
-    validate_input → investigate → guardrails → execute_actions → human_approval → respond
-       (code)       (LLM agent)     (code)          (code)          (interrupt)      (code)
+    validate_input → investigate → guardrails → execute_actions → notify_operations → human_approval → respond
+       (code)       (LLM agent)     (code)          (code)        (approvals + Slack)     (interrupt)      (code)
 
 Early exits go straight to ``respond``: invalid input, invalid LLM output, or a guardrail stop rule
 (missing information, not found, unverified ID).
@@ -33,6 +33,7 @@ def build_graph(
     graph.add_node("investigate", nodes.investigate)
     graph.add_node("guardrails", nodes.guardrails)
     graph.add_node("execute_actions", nodes.execute_actions)
+    graph.add_node("notify_operations", nodes.notify_operations)
     graph.add_node("human_approval", nodes.human_approval)
     graph.add_node("respond", nodes.respond)
 
@@ -40,7 +41,8 @@ def build_graph(
     graph.add_conditional_edges("validate_input", nodes.route_after_validation, ["investigate", "respond"])
     graph.add_conditional_edges("investigate", nodes.route_after_investigate, ["guardrails", "respond"])
     graph.add_conditional_edges("guardrails", nodes.route_after_guardrails, ["execute_actions", "respond"])
-    graph.add_edge("execute_actions", "human_approval")
+    graph.add_edge("execute_actions", "notify_operations")
+    graph.add_edge("notify_operations", "human_approval")
     graph.add_edge("human_approval", "respond")
     graph.add_edge("respond", END)
     return graph.compile(checkpointer=checkpointer, name="opspilot")

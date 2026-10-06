@@ -1,6 +1,6 @@
 """Streamlit UI flows with AppTest (no browser, no LLM). The service functions are replaced by fakes."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +12,7 @@ from src.common.schemas import (
     AnalyzeResponse,
     ApprovalRequest,
     ApprovalStatus,
+    CaseRecord,
     ExecutedAction,
     Execution,
     GuardrailDecision,
@@ -23,6 +24,7 @@ from src.common.schemas import (
 
 APP = str(Path(__file__).resolve().parents[1] / "src" / "web" / "app.py")
 REFUND_TEXT = "My order ORD-1007 is 15 days late. I want a refund."
+DRAFT = "Hi Alex,\n\nYour refund request for $249.99 is being reviewed by our team."
 
 
 def _approval(status: ApprovalStatus = ApprovalStatus.PENDING) -> ApprovalRequest:
@@ -38,9 +40,6 @@ def _approval(status: ApprovalStatus = ApprovalStatus.PENDING) -> ApprovalReques
 
 
 def _refund_response(status: ResponseStatus, approval_status: ApprovalStatus) -> AnalyzeResponse:
-    executed = [ExecutedAction(action="create_support_ticket", success=True, result_id="TCK-2009")]
-    if approval_status is ApprovalStatus.APPROVED:
-        executed.append(ExecutedAction(action="issue_refund", success=True, result_id="RFD-0001"))
     return AnalyzeResponse(
         request_id="req-ui",
         thread_id="req-ui",
@@ -59,103 +58,153 @@ def _refund_response(status: ResponseStatus, approval_status: ApprovalStatus) ->
                 reason="Refunds always require human approval.",
             )
         ],
-        executed_actions=executed,
+        executed_actions=[ExecutedAction(action="create_support_ticket", success=True, result_id="TCK-2009")],
         approvals=[_approval(approval_status)],
         approval_required=approval_status is ApprovalStatus.PENDING,
-        customer_response="Hi Alex,\n\nYour refund request is being reviewed by our team.",
+        customer_response=DRAFT,
+    )
+
+
+def _case(response: AnalyzeResponse) -> CaseRecord:
+    now = datetime(2026, 10, 10, tzinfo=UTC)
+    return CaseRecord(
+        request_id=response.request_id,
+        created_at=now,
+        updated_at=now,
+        customer_messages=[REFUND_TEXT],
+        response=response,
     )
 
 
 @pytest.fixture
-def fake_service(monkeypatch) -> dict[str, list[Any]]:
-    calls: dict[str, list[Any]] = {"run": [], "resume": []}
-    replies: list[AnalyzeResponse] = []
+def fake_service(monkeypatch) -> dict[str, Any]:
+    state: dict[str, Any] = {"run": [], "resume": [], "resets": 0, "replies": [], "cases": []}
 
     def fake_run(message: str, history: list[str] | None = None, *, graph: Any = None) -> AnalyzeResponse:
-        calls["run"].append((message, list(history or [])))
-        return replies.pop(0)
+        state["run"].append((message, list(history or [])))
+        return state["replies"].pop(0)
 
     def fake_resume(thread_id: str, decisions: dict[str, str], *, graph: Any = None) -> AnalyzeResponse:
-        calls["resume"].append((thread_id, decisions))
+        state["resume"].append((thread_id, decisions))
         approved = decisions.get("APR-1001") == "approve"
-        return _refund_response(
-            ResponseStatus.COMPLETED, ApprovalStatus.APPROVED if approved else ApprovalStatus.REJECTED
-        )
+        decided = ApprovalStatus.APPROVED if approved else ApprovalStatus.REJECTED
+        response = _refund_response(ResponseStatus.COMPLETED, decided)
+        state["cases"] = [_case(response)]
+        return response
+
+    def fake_reset() -> None:
+        state["resets"] += 1
+        state["cases"] = []
 
     monkeypatch.setattr(service, "run_agent", fake_run)
     monkeypatch.setattr(service, "resume_agent", fake_resume)
+    monkeypatch.setattr(service, "list_cases", lambda: state["cases"])
+    monkeypatch.setattr(service, "reset_demo_data", fake_reset)
     monkeypatch.setattr(service, "get_graph", object)  # no real graph is built
-    calls["replies"] = replies
-    return calls
+    return state
 
 
 def _app() -> AppTest:
     return AppTest.from_file(APP, default_timeout=60).run()
 
 
-def test_initial_page_renders(fake_service):
+def _chat_texts(at: AppTest) -> list[str]:
+    return [m.markdown[0].value for m in at.chat_message]
+
+
+# --- Chat page (customers) ---------------------------------------------------------------
+
+
+def test_chat_is_the_default_page(fake_service):
     at = _app()
     assert not at.exception
-    assert at.title[0].value == "OpsPilot"
+    assert at.title[0].value == "OpsPilot Support"
+    assert _chat_texts(at)[0].startswith("Hi! I'm the OpsPilot support assistant")
     assert len([b for b in at.sidebar.button if b.key.startswith("scenario_")]) == 6
-    assert at.button(key="analyze").label == "Analyze"
 
 
-def test_scenario_button_prefills_the_request(fake_service):
-    at = _app()
-    at.button(key="scenario_1").click().run()
-    assert at.text_area(key="message_input").value == REFUND_TEXT
-
-
-def test_refund_flow_with_approve(fake_service):
+def test_chat_shows_the_reply_draft_and_no_internal_details(fake_service):
     fake_service["replies"].append(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))
     at = _app()
-    at.button(key="scenario_1").click().run()
-    at.button(key="analyze").click().run()
+    at.chat_input(key="chat_input").set_value(REFUND_TEXT).run()
 
     assert fake_service["run"] == [(REFUND_TEXT, [])]
-    assert "Awaiting human approval" in at.warning[0].value
-    assert at.text_area(key="draft_view").value.startswith("Hi Alex")  # the draft is shown, not sent
-
-    at.button(key="approve_APR-1001").click().run()
-    assert fake_service["resume"] == [("req-ui", {"APR-1001": "approve"})]
-    assert "Completed" in at.success[0].value
-    assert not [b for b in at.button if b.key == "approve_APR-1001"]  # decided: no more buttons
-
-
-def test_refund_flow_with_reject(fake_service):
-    fake_service["replies"].append(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))
-    at = _app()
-    at.text_area(key="message_input").input(REFUND_TEXT).run()
-    at.button(key="analyze").click().run()
-    at.button(key="reject_APR-1001").click().run()
-    assert fake_service["resume"] == [("req-ui", {"APR-1001": "reject"})]
+    texts = _chat_texts(at)
+    assert texts[-2] == REFUND_TEXT
+    assert texts[-1].startswith("Hi Alex,")
+    assert "\\$249.99" in texts[-1]  # dollar amounts are escaped, not rendered as LaTeX
+    rendered = " ".join(m.value for m in at.markdown)
+    for internal in ("HIGH", "refund_requires_approval", "APR-1001"):
+        assert internal not in rendered
+    assert not any(b.key.startswith(("approve_", "reject_")) for b in at.button)
+    assert not at.metric  # no severity / order metrics for customers
 
 
-def test_clarification_reply_is_sent_with_history(fake_service):
+def test_chat_clarification_round_trip_sends_history(fake_service):
     question = "Could you share your order ID?"
     fake_service["replies"] += [
         AnalyzeResponse(request_id="req-1", thread_id="req-1", status=ResponseStatus.NEEDS_MORE_INFO, message=question),
         _refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING),
     ]
     at = _app()
-    at.text_area(key="message_input").input("My order hasn't arrived and I want a refund.").run()
-    at.button(key="analyze").click().run()
+    at.chat_input(key="chat_input").set_value("My order hasn't arrived and I want a refund.").run()
+    assert _chat_texts(at)[-1] == question
 
-    assert [m.markdown[0].value for m in at.chat_message] == ["My order hasn't arrived and I want a refund.", question]
-    assert at.button(key="analyze").label == "Send reply"
-
-    at.text_area(key="message_input").input("It's ORD-1007.").run()
-    at.button(key="analyze").click().run()
+    at.chat_input(key="chat_input").set_value("It's ORD-1007.").run()
     assert fake_service["run"][1] == ("It's ORD-1007.", ["My order hasn't arrived and I want a refund."])
-    assert not at.chat_message  # the exchange ended
+    assert _chat_texts(at)[-1].startswith("Hi Alex,")
 
 
-def test_reset_clears_the_session(fake_service):
+def test_scenario_button_sends_the_message(fake_service):
     fake_service["replies"].append(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))
     at = _app()
-    at.text_area(key="message_input").input(REFUND_TEXT).run()
-    at.button(key="analyze").click().run()
+    at.button(key="scenario_1").click().run()
+    assert fake_service["run"] == [(REFUND_TEXT, [])]
+
+
+def test_new_conversation_clears_the_chat(fake_service):
+    fake_service["replies"].append(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))
+    at = _app()
+    at.chat_input(key="chat_input").set_value(REFUND_TEXT).run()
+    at.button(key="new_conversation").click().run()
+    assert len(at.chat_message) == 1  # only the greeting
+
+
+# --- Operation Admin page (operations) -----------------------------------------------------
+
+
+def _admin(fake_service, *cases: CaseRecord) -> AppTest:
+    fake_service["cases"] = list(cases)
+    return _app().switch_page("views/admin.py").run()
+
+
+def test_admin_shows_empty_state(fake_service):
+    at = _admin(fake_service)
+    assert not at.exception
+    assert at.title[0].value == "Operation Admin"
+    assert "No cases yet" in at.info[0].value
+
+
+def test_admin_lists_pending_case_and_approves(fake_service):
+    at = _admin(fake_service, _case(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING)))
+    assert at.metric[0].value == "1"  # waiting for approval
+    assert "ORD-1007" in at.expander[0].label
+    assert "Awaiting approval" in at.expander[0].label
+
+    at.button(key="approve_APR-1001").click().run()
+    assert fake_service["resume"] == [("req-ui", {"APR-1001": "approve"})]
+    assert at.metric[0].value == "0"
+    assert not any(b.key == "approve_APR-1001" for b in at.button)  # decided: no more buttons
+
+
+def test_admin_rejects(fake_service):
+    at = _admin(fake_service, _case(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING)))
+    at.button(key="reject_APR-1001").click().run()
+    assert fake_service["resume"] == [("req-ui", {"APR-1001": "reject"})]
+
+
+def test_admin_reset_demo_data(fake_service):
+    at = _admin(fake_service, _case(_refund_response(ResponseStatus.COMPLETED, ApprovalStatus.APPROVED)))
     at.button(key="reset_demo").click().run()
-    assert not at.warning
-    assert at.text_area(key="message_input").value == ""
+    assert fake_service["resets"] == 1
+    assert "No cases yet" in at.info[0].value

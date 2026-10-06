@@ -1,10 +1,10 @@
 """Assemble the final ``AnalyzeResponse`` from graph state.
 
 A pure function, used by the ``respond`` node and by the service while a run is paused for approval
-(the ``respond`` node has not run yet then).
+(the ``respond`` node has not run yet then; the pending approvals are already in the state).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from src.common.schemas import AnalyzeResponse, ApprovalRequest, ApprovalStatus, GuardrailOutcome, ResponseStatus
@@ -35,7 +35,7 @@ def error_response(request_id: str, error: str = "internal_error") -> AnalyzeRes
     )
 
 
-def build_response(state: Mapping[str, Any], *, pending: Sequence[ApprovalRequest] = ()) -> AnalyzeResponse:
+def build_response(state: Mapping[str, Any]) -> AnalyzeResponse:
     request_id: str = state["request_id"]
     error = state.get("error")
     if error:
@@ -46,7 +46,8 @@ def build_response(state: Mapping[str, Any], *, pending: Sequence[ApprovalReques
         return error_response(request_id)
 
     proposal = state.get("proposal")
-    approvals = [*state.get("approvals", []), *pending]
+    # Decided approvals replace the pending ones once human_approval has run.
+    approvals: list[ApprovalRequest] = list(state.get("approvals") or state.get("pending_approvals") or [])
     awaiting = any(a.status is ApprovalStatus.PENDING for a in approvals)
     if result.outcome is GuardrailOutcome.PROCEED:
         status = ResponseStatus.AWAITING_APPROVAL if awaiting else ResponseStatus.COMPLETED
@@ -71,4 +72,5 @@ def build_response(state: Mapping[str, Any], *, pending: Sequence[ApprovalReques
         approval_required=awaiting,
         customer_response=state.get("customer_response"),
         draft_policy_violations=list(state.get("draft_violations", [])),
+        notification=state.get("notification"),
     )

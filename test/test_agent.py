@@ -5,12 +5,13 @@ import logging
 from typing import Any
 
 import pytest
-from fakes import fake_model, tool_call
+from fakes import FakeNotifier, fake_model, tool_call
 from langchain_core.messages import AIMessage
 
 from src.agents.graph import build_graph
-from src.agents.service import resume_agent, run_agent
+from src.agents.service import list_cases, pending_cases, reset_demo_data, resume_agent, run_agent
 from src.common.schemas import ApprovalStatus, Execution, ResponseStatus, RuleId, Severity
+from src.integrations.slack import set_notifier
 from src.memory.checkpointer import make_checkpointer
 from src.repositories.action_store import get_action_store
 from src.utils.logging import get_logger, make_handler
@@ -360,3 +361,78 @@ def test_resume_round_trips_state_without_unregistered_type_warnings(caplog):
         paused = run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=graph)
         resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "approve"}, graph=graph)
     assert not [r for r in caplog.records if "unregistered type" in r.getMessage()]
+
+
+# --- Phase 9: operations report to Slack (notify_operations) -----------------------------
+
+
+@pytest.fixture
+def notifier():
+    fake = FakeNotifier()
+    set_notifier(fake)
+    return fake
+
+
+def test_report_is_posted_once_with_the_pending_approval(notifier):
+    graph = refund_graph()
+    paused = run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=graph)
+    (report,) = notifier.posts
+    assert report.severity is Severity.HIGH
+    assert [a.status for a in report.approvals] == [ApprovalStatus.PENDING]
+    assert report.customer_response == COMPLIANT_DRAFT
+    assert {a.action for a in report.executed_actions} == {"create_support_ticket", "prepare_customer_response"}
+    assert paused.notification is not None
+    assert paused.notification.ts == "1.000100"
+    assert executed(paused)["send_operations_notification"] is True
+
+    resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "approve"}, graph=graph)
+    assert len(notifier.posts) == 1  # resuming never re-posts the report
+
+
+def test_approval_decision_is_replied_in_the_slack_thread(notifier):
+    graph = refund_graph()
+    paused = run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=graph)
+    resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "reject"}, graph=graph)
+    ((channel, ts, text),) = notifier.replies
+    assert (channel, ts) == ("C0TEST", "1.000100")
+    assert text.startswith("❌ Refund rejected: APR-1001")
+
+
+def test_slack_failure_does_not_fail_the_request():
+    set_notifier(FakeNotifier(fail=True))
+    graph = graph_for(*investigation("ORD-1001", "CUS-101"), proposal())
+    response = run_agent("My order ORD-1001 is two days late.", graph=graph)
+    assert response.status is ResponseStatus.COMPLETED
+    assert executed(response) == {
+        "create_support_ticket": True,
+        "prepare_customer_response": True,
+        "send_operations_notification": False,
+    }
+    assert response.notification is not None
+    assert response.notification.error == "SLACK_ERROR: channel_not_found"
+
+
+def test_no_report_when_guardrails_stop_the_case(notifier):
+    run_agent("My order hasn't arrived and I want a refund.", graph=graph_for(_clarification()))
+    assert notifier.posts == []
+
+
+def test_cases_are_recorded_for_the_admin_page():
+    graph = refund_graph()
+    paused = run_agent("It's ORD-1007.", history=["My order hasn't arrived and I want a refund."], graph=graph)
+    (case,) = pending_cases()
+    assert case.request_id == paused.request_id
+    assert case.customer_messages == ["My order hasn't arrived and I want a refund.", "It's ORD-1007."]
+
+    resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "approve"}, graph=graph)
+    assert pending_cases() == []
+    (case,) = list_cases()
+    assert case.response.status is ResponseStatus.COMPLETED
+    assert case.customer_messages == ["My order hasn't arrived and I want a refund.", "It's ORD-1007."]
+
+
+def test_reset_demo_data_clears_cases_and_actions():
+    run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=refund_graph())
+    reset_demo_data()
+    assert list_cases() == []
+    assert get_action_store().tickets == []

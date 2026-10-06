@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**OpsPilot**: a small demo AI agent for a customer-support/operations team (2–4 hour coding-challenge scope). It analyzes a customer request, investigates local sample data with tools, recommends actions, auto-runs safe internal ones (ticket, ops notification, reply draft), and sends **refunds, the only action that needs approval**, to a human. It never sends messages to customers; it only drafts them.
+**OpsPilot**: a demo AI agent for a customer-support/operations team (coding-challenge scope). Customers talk to a **chatbot**. The agent investigates local sample data with tools, recommends actions, auto-runs safe internal ones (ticket, reply draft), **posts the full case report to Slack** (tagging the team), and sends **refunds, the only action that needs approval**, to the **Operation Admin** page. The chatbot shows the customer the R8-checked reply draft (decision D6).
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: all 8 phases done. The pipeline, Streamlit demo UI (`src/web/app.py`), and REST API (`src/api/`) work end to end. The README covers spec §25, and the Loom script is in `docs/demo-script.md`. The build history and per-phase notes are in `plans/`.
+Status: all 9 phases done. Phase 9 added the customer Chat page, the Operation Admin page, and real Slack notifications (optional; simulated when `SLACK_*` is unset). The README covers spec §25, and the Loom script is in `docs/demo-script.md`. The build history and per-phase notes are in `plans/`.
 
 ## Stack
 
@@ -20,7 +20,7 @@ Python 3.14 + uv · OpenAI via LangChain v1 (`create_agent`, `init_chat_model("o
 uv sync                                            # install deps from pyproject.toml
 cp src/.env/.env.example src/.env/.env             # then set OPENAI_API_KEY, OPENAI_MODEL, LANGSMITH_*
 
-uv run python -m streamlit run src/web/app.py      # demo UI (run from repo root)
+uv run python -m streamlit run src/web/app.py      # demo UI: Chat + Operation Admin pages (run from repo root)
 uv run uvicorn src.main:app --reload               # REST API: POST /api/v1/agent/analyze
 
 uv run pytest                                      # all tests
@@ -32,8 +32,8 @@ Use `python -m streamlit`, not bare `streamlit`. The `-m` form puts the repo roo
 ## Architecture
 
 ```text
-validate_input → investigate → guardrails → execute_actions → human_approval → respond
-    (code)      (LLM: create_agent)  (code)        (code)        (interrupt())     (code)
+validate_input → investigate → guardrails → execute_actions → notify_operations → human_approval → respond
+    (code)      (LLM: create_agent)  (code)        (code)       (approvals + Slack)   (interrupt())     (code)
 ```
 
 - **Only `investigate` uses the LLM.** It is a `create_agent` limited to **read-only tools** (`get_order`, `get_customer`, `get_support_tickets`, `get_subscription`), and it must return a Pydantic `AgentProposal` via `ToolStrategy`. If the output is invalid or a call limit is hit, the request ends with a safe error and no action runs.
@@ -43,9 +43,10 @@ validate_input → investigate → guardrails → execute_actions → human_appr
   2. The `guardrails` graph node, built from pure functions in `rules.py` / `severity.py`, makes the business decisions.
 
   Business rules never go into middleware: the LLM never calls action tools, and `HumanInTheLoopMiddleware` cannot express data-dependent rules.
-- **The LLM never calls action tools.** `create_support_ticket`, `send_operations_notification`, `prepare_customer_response`, and `request_human_approval` are invoked only by graph nodes after the guardrails decide. All actions are simulated.
-- **Human approval** uses `interrupt()` in the outer graph, with `InMemorySaver` and `thread_id = request_id`, and resumes via `Command(resume=...)`. Streamlit and FastAPI both call `src/agents/service.py` (`run_agent` / `resume_agent`). Neither embeds graph logic.
-- **Layering:** `web`/`api` → `agents` → `llm` / `tools` / `guardrails` / `repositories` / `memory` / `prompts` → `common` / `config` / `utils`. `guardrails` and `tools` never import `llm`.
+- **The LLM never calls action tools.** `create_support_ticket`, `send_operations_notification`, `prepare_customer_response`, and `request_human_approval` are invoked only by graph nodes after the guardrails decide. All actions are simulated except the ops notification, which goes to Slack via `src/integrations/slack.py` when configured.
+- **`notify_operations`** creates the refund approvals, then posts the `OperationsReport` (Block Kit, `src/integrations/slack_report.py`) if guardrails allowed the notification. It completes before `human_approval` pauses, so resume never re-posts; decisions are replied in the Slack thread. A Slack failure is recorded, never raised.
+- **Human approval** uses `interrupt()` in the outer graph, with `InMemorySaver` and `thread_id = request_id`, and resumes via `Command(resume=...)`. Streamlit (Chat + Operation Admin pages in `src/web/views/`) and FastAPI both call `src/agents/service.py` (`run_agent` / `resume_agent` / `list_cases` / `reset_demo_data`). Every result is saved in `repositories/case_store.py` for the admin page.
+- **Layering:** `web`/`api` → `agents` → `llm` / `tools` / `guardrails` / `repositories` / `memory` / `prompts` / `integrations` → `common` / `config` / `utils`. `guardrails` and `tools` never import `llm`; `integrations` never imports `agents`, `guardrails`, or `llm`.
   - `common/schemas/` holds every Pydantic model or enum shared across layers (domain records, `AgentProposal`, `GuardrailDecision`, `AnalyzeResponse`). It contains no logic or I/O and imports nothing from `src`.
   - `repositories/` holds data access: the JSON `data_store` and the in-memory `action_store`.
   - `memory/` is agent memory only (the LangGraph checkpointer).
@@ -65,6 +66,8 @@ Every instruction sent to the LLM is a Markdown file in `src/prompts/<name>.md`,
 - Every `AgentProposal` field is required (explicit `null` / `[]`). Models skip optional fields.
 - `langgraph.prebuilt.create_react_agent` is legacy. Use `langchain.agents.create_agent`.
 - `GenericFakeChatModel.bind_tools` raises `NotImplementedError`. Tests use `FakeChatModel` from `test/fakes.py`, which overrides it; script model turns with `fake_model(...)` and `tool_call(...)`. Tests never call OpenAI or LangSmith (`LANGSMITH_TRACING=false`).
+- Tests never post to Slack: `conftest.py` blanks `SLACK_*` and resets the notifier; inject `FakeNotifier` (`test/fakes.py`) with `set_notifier(...)` to assert on reports and thread replies.
+- Streamlit markdown renders `$…$` as LaTeX: show customer text through `components.as_markdown` (escapes `$`, e.g. `$249.99`).
 - `.claude/` is gitignored, so project skills are not committed.
 
 ## Project skills

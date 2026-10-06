@@ -1,6 +1,6 @@
 # OpsPilot: AI Operations Automation Agent
 
-OpsPilot helps a customer-support / operations team handle incoming requests for a (fictional) direct-to-consumer e-commerce company. It reads a customer message, investigates internal operational data with tools, explains the issue with evidence, runs safe internal actions automatically, and **stops for a human** before anything risky. Every refund waits for approval, and nothing is ever sent to a customer.
+OpsPilot helps a customer-support / operations team handle incoming requests for a (fictional) direct-to-consumer e-commerce company. Customers describe their problem to a **chatbot**; OpsPilot investigates internal operational data with tools, explains the issue with evidence, runs safe internal actions automatically, **reports every case to the operations team in Slack**, and **stops for a human** before anything risky. Every refund waits for approval on the **Operation Admin** page.
 
 > **The core idea:** the LLM *investigates and recommends*; deterministic code *decides*; a human *approves* money.
 
@@ -52,16 +52,18 @@ OpsPilot works like **a new team member preparing a case file for their manager*
 | 4. Severity | **HIGH**: the customer wants a refund, and the order is more than 7 days late |
 | 5. Act right away | Create a support ticket, alert the operations team, draft a reply to the customer |
 | 6. Stop and ask for approval | **Refund of $249.99 → waits for a manager's approval** |
-| 7. Reply draft | "Hi Alex, … your refund request is being reviewed by our team…" (a draft only: not sent, and no refund promised) |
+| 7. Reply to the customer | The chatbot answers: "Hi Alex, … your refund request is being reviewed by our team…". It never promises a refund. |
+| 8. Report to the team | The full analysis is posted to the operations Slack channel, tagging the people on duty |
 
-Only when the manager clicks **Approve** in the UI does the system issue the (simulated) refund. Clicking **Reject** changes nothing.
+Only when a manager clicks **Approve** on the Operation Admin page does the system issue the (simulated) refund; the decision is also posted in the Slack thread. Clicking **Reject** changes nothing.
 
 ### Business rules
 
 | Rule | What it means for the business |
 |---|---|
 | Only refunds need human approval | People stay accountable for every decision involving money, whatever the amount |
-| Never message customers | The system has no way to send messages; the AI only drafts, and a team member reviews and sends |
+| Safe customer replies | The chatbot replies like a person, but every reply is checked by a content policy: it can never promise a refund or compensation, or reveal internal details |
+| Report every case to the team | The full analysis goes to the operations Slack channel and tags the responsible people, so nothing is handled silently |
 | No duplicate tickets | If an open ticket already exists, the operations team is pointed to it, so two people don't work on the same case |
 | Missing information → ask | Without an order ID, the AI asks the customer in its own words instead of guessing; when the customer replies, it continues with the full context |
 | Never invent data | If an order does not exist, the system says "not found". The AI may not look up an order ID the customer never wrote |
@@ -85,8 +87,8 @@ OpsPilot splits the work by what each part is good at:
 |---|---|---|
 | Understand + investigate | **LLM** (OpenAI via LangChain `create_agent`) | Classifies the request, calls **read-only** tools, writes a summary, evidence, recommended actions, and a reply draft |
 | Decide | **Deterministic rules** (`src/guardrails`) | Re-read the data and compute severity. For every recommended action they decide **automatic / human approval / blocked**. |
-| Act | **Workflow code** | Runs only the actions the rules allowed (simulated ticket, Slack alert, draft) |
-| Approve | **Human** | Approves or rejects refunds; the workflow pauses until they decide |
+| Act | **Workflow code** | Runs only the actions the rules allowed: simulated ticket, reply draft, and the case report to **Slack** |
+| Approve | **Human** | Approves or rejects refunds on the **Operation Admin** page; the workflow pauses until they decide |
 
 If information is missing, OpsPilot asks for it. If a record does not exist, it says so. If the LLM output is invalid, nothing happens. *When uncertain, do less rather than more.*
 
@@ -94,7 +96,7 @@ If information is missing, OpsPilot asks for it. If a record does not exist, it 
 
 ```text
                         ┌──────────────────────┐
-                        │   Customer request   │  Streamlit UI · REST API
+                        │   Customer request   │  Chat page (Streamlit) · REST API
                         └──────────┬───────────┘
                                    ▼
                         ┌──────────────────────┐
@@ -117,12 +119,16 @@ If information is missing, OpsPilot asks for it. If a record does not exist, it 
                stop rules      │           │ proceed
      (missing info, not found, │           ▼
       unverified ID)           │  ┌──────────────────────┐
-                               │  │   execute_actions    │  ticket · ops alert · reply draft (R8-checked)
+                               │  │   execute_actions    │  ticket · reply draft (R8-checked)
                                │  └──────────┬───────────┘
                                │             ▼
                                │  ┌──────────────────────┐
-                               │  │    human_approval    │  interrupt(): pauses for refunds,
-                               │  └──────────┬───────────┘  resumes on Approve / Reject
+                               │  │  notify_operations   │  approval requests + full report → Slack
+                               │  └──────────┬───────────┘  (tags the ops team; simulated if unset)
+                               │             ▼
+                               │  ┌──────────────────────┐
+                               │  │    human_approval    │  interrupt(): pauses for refunds, resumes on
+                               │  └──────────┬───────────┘  Approve / Reject in Operation Admin → Slack thread
                                ▼             ▼
                         ┌──────────────────────┐
                         │       respond        │  structured AnalyzeResponse
@@ -140,9 +146,11 @@ The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval u
 | `src/tools/` | LangChain `@tool`s: 4 read tools for the LLM; action tools called only by workflow nodes |
 | `src/prompts/` | Versioned Markdown prompts (`ops_agent_system.md`, `customer_response_example.md`) + loader |
 | `src/common/schemas/` | Pydantic models and enums shared across layers (`AgentProposal`, `GuardrailDecision`, `AnalyzeResponse`, …) |
-| `src/repositories/` | Read-only JSON data store + in-memory action store (created tickets, approvals, refunds) |
+| `src/repositories/` | Read-only JSON data store + in-memory action store (tickets, approvals, refunds) + case store (admin page) |
 | `src/memory/` | LangGraph checkpointer (agent memory for pause/resume) |
-| `src/web/`, `src/api/` | Streamlit demo UI and FastAPI endpoint: thin adapters over `service.py` |
+| `src/web/` | Streamlit app: **Chat** page (customers) and **Operation Admin** page (cases + refund approvals) |
+| `src/integrations/` | Slack notifier (`chat.postMessage`, thread replies) and Block Kit report rendering |
+| `src/api/` | FastAPI endpoint: a thin adapter over `service.py` |
 | `data/` | Fictional sample data: 15 orders, 12 customers, 8 tickets, 10 subscriptions |
 | `specs/`, `plans/` | Specification and the phase-by-phase implementation plan |
 
@@ -161,7 +169,7 @@ The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval u
 |---|---|
 | R1 `refund_requires_approval` | Every refund waits for a human, any amount |
 | R2 `high_value_order` (≥ $500) | Escalates ticket priority / alert to `critical` and severity to CRITICAL |
-| R3 `external_communication_blocked` | OpsPilot has no way to message customers; it only drafts |
+| R3 `external_communication_blocked` | No separate customer-messaging action exists; the only customer-facing text is the R8-checked draft shown in the chat (D6) |
 | R4 `duplicate_ticket` | An open/in-progress ticket for the same issue blocks a new one |
 | R5 `missing_information` | No order/customer ID: ask (the LLM writes the question); every action blocked |
 | R6 `order_not_found` | Unknown ID: say so; every action blocked |
@@ -176,7 +184,7 @@ Business rules are deliberately **not** middleware: the LLM never calls action t
 
 **Tools never fabricate data.** Tools return structured results (`{"success": false, "error": "ORDER_NOT_FOUND", ...}`), and the prompt forbids stating facts that are not in tool results. Delays are computed from the data (`days_late`), not from the customer's claim.
 
-**No external communication without a human.** The system produces a reply *draft*, labelled "not sent", and has no capability to send it.
+**Customer-facing text is constrained.** The only text a customer sees is the reply draft after the deterministic R8 policy (no refund/compensation promises, no internal details); a violating draft is replaced by a safe fallback. There is no other customer-messaging capability (D6 changed the original "draft only, never shown" behaviour at the client's request).
 
 ### Decisions on points the spec left open
 
@@ -187,6 +195,10 @@ Business rules are deliberately **not** middleware: the LLM never calls action t
 | D3 | Severity is a deterministic table; when several conditions match, the highest wins. Severity drives display and priority, not approval. |
 | D4 | The LLM writes the reply draft from an example template (`customer_response_example.md`); deterministic policy R8 checks it before use. |
 | D5 | A request without an ID still reaches the LLM, which asks for the missing information in its own words; code guarantees no tool or action runs. Follow-up replies are sent with the earlier messages as `history`. |
+| D6 | **Customer chatbot** (client request): the chat shows the R8-checked reply draft to the customer. This deliberately changes spec Rule 3 ("never send automatically"); refund/compensation promises remain impossible because of R8. |
+| D7 | **Real Slack notifications** (client request): the full case report is posted to a Slack channel and tags the configured people. It is optional: without configuration it is simulated, so tests and fresh clones never need Slack. |
+| D8 | **Operation Admin page**: approvals moved off the customer UI. Admins see every case and approve/reject refunds there; each decision is replied in the report's Slack thread. |
+| D9 | Slack is notified only when guardrails allow `send_operations_notification` (stop rules such as missing information or not found send nothing). |
 
 Also: the spec suggests logging `user_input`. OpsPilot logs the message **length** and the IDs instead of the raw text, to keep customer text and PII out of application logs. The full text is visible in LangSmith when debugging.
 
@@ -196,14 +208,24 @@ Requirements: [uv](https://docs.astral.sh/uv/) (it installs Python 3.14 from `.p
 
 ```bash
 uv sync
-cp src/.env/.env.example src/.env/.env      # then set OPENAI_API_KEY, OPENAI_MODEL (e.g. gpt-4.1-mini), LANGSMITH_*
+cp src/.env/.env.example src/.env/.env      # then set OPENAI_API_KEY, OPENAI_MODEL (e.g. gpt-4.1-mini), LANGSMITH_*, SLACK_* (optional)
 
-uv run python -m streamlit run src/web/app.py     # demo UI → http://localhost:8501
+uv run python -m streamlit run src/web/app.py     # demo UI → http://localhost:8501 (Chat + Operation Admin)
 uv run uvicorn src.main:app --reload              # REST API → http://localhost:8000/docs
 uv run pytest                                     # tests (offline: no OpenAI or LangSmith calls)
 ```
 
 Run commands from the repository root. Use `python -m streamlit`, which puts the repo root on `sys.path` so that `import src…` works. `src/.env` is a directory; the real secrets file `src/.env/.env` is gitignored.
+
+**Slack (optional).** Create a Slack app at api.slack.com/apps with the bot scope `chat:write`, install it to the workspace, invite the bot to a channel (`/invite @OpsPilot`), and set:
+
+```text
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_CHANNEL_ID=C0XXXXXXX
+SLACK_MENTION_USER_IDS=U0XXXXXXX,U0YYYYYYY   # people tagged on every report
+```
+
+Without these, reports are logged as `[SIMULATED SLACK]` messages.
 
 API example:
 
@@ -217,7 +239,7 @@ Quality checks: `uv run ruff format --check . && uv run ruff check . && uv run m
 
 ## 6. Demo Examples
 
-Use the sidebar buttons in the Streamlit UI. "Today" is fixed at 2026-10-10.
+Use the scenario buttons on the **Chat** page, then open **Operation Admin** to review cases and decide refunds. With Slack configured, each report appears in the channel with the configured people tagged. "Today" is fixed at 2026-10-10.
 
 | # | Input | Expected outcome |
 |---|---|---|
@@ -229,14 +251,16 @@ Use the sidebar buttons in the Streamlit UI. "Today" is fixed at 2026-10-10.
 | 5b | Reply "It's ORD-1007." to Scenario 5 | Continues with full context → refund waits for approval |
 | 6 | My order ORD-1015 is delayed. Please refund the order. | `awaiting_approval`, **CRITICAL** ($1,200): refund needs approval; ticket/alert get `critical` priority |
 
-All of these were verified end to end with `gpt-4.1-mini`, including Approve → simulated refund executed.
+All of these were verified end to end with `gpt-4.1-mini`, including Approve → simulated refund executed. In Phase 9 they were re-run through the Chat page with a real Slack workspace: S2 and S3 posted tagged reports, S4 and S5 posted nothing, and approving S2 in Operation Admin executed the refund and replied in the Slack thread.
 
 ## 7. Known Limitations
 
 - Sample data is local JSON; there is no database.
 - All actions are simulated: no real ticketing system, Slack, or payment provider.
-- Human approval is simulated in the demo UI. Approvals and paused runs live in memory (`InMemorySaver`, in-memory action store) and are lost on restart; the action store is shared by all browser sessions.
-- No authentication or authorization; anyone with the UI can approve a refund.
+- Human approval is simulated in the demo UI. Approvals, cases, and paused runs live in memory (`InMemorySaver`, in-memory action and case stores) and are lost on restart; they are shared by all browser sessions.
+- No authentication or authorization: anyone who can open the Operation Admin page can approve a refund, and the chat has no customer login.
+- The chatbot shows the AI-written reply draft to the customer (D6). R8 blocks refund promises and internal details, but the wording is still generated text.
+- The Slack report contains customer names and the reply text; acceptable only because all demo data is fictional.
 - The evaluation set is small: scripted offline tests plus manual real-model runs of the demo scenarios. There is no automated LLM eval suite.
 - LLM behaviour is non-deterministic. Guardrails make outcomes safe, but recommendations can vary between runs (e.g. a reply draft may fall back to the safe template).
 - LangSmith traces contain the customer's message text, acceptable only because all demo data is fictional.

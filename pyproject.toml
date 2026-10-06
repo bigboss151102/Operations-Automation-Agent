@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.4",
     "pyyaml>=6.0.3",
+    "slack-sdk>=3.45.0",
     "streamlit>=1.65.0",
     "uvicorn>=0.54.0",
 ]

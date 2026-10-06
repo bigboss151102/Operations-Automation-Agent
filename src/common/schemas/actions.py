@@ -6,12 +6,13 @@ from typing import Any
 from pydantic import Field
 
 from src.common.schemas._base import Record
+from src.common.schemas.delivery import NotificationResult
 from src.common.schemas.enums import ApprovalStatus, Severity
 from src.common.schemas.ids import OrderId
 
 
 class OperationsNotification(Record):
-    """A simulated Slack alert to the operations team (spec Tool 6)."""
+    """An alert to the operations team (spec Tool 6): posted to Slack, or simulated when Slack is not configured."""
 
     notification_id: str
     channel: str
@@ -20,10 +21,11 @@ class OperationsNotification(Record):
     order_id: OrderId | None = None
     recommended_action: str
     created_at: date
+    delivery: NotificationResult | None = None
 
 
 class CustomerDraft(Record):
-    """A customer reply draft. Drafts are never sent (spec Rule 3)."""
+    """A customer reply draft, R8-checked. The chatbot shows it to the customer (decision D6)."""
 
     draft_id: str
     customer_name: str

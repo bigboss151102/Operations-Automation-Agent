@@ -44,16 +44,18 @@ OpsPilot làm việc như **một nhân viên mới chuẩn bị hồ sơ cho s�
 | 4. Mức độ | **HIGH**: khách đòi refund, trễ hơn 7 ngày |
 | 5. Tự làm ngay | Tạo ticket hỗ trợ, báo đội vận hành, soạn nháp thư trả lời khách |
 | 6. Dừng lại xin duyệt | **Refund $249.99 → chờ quản lý duyệt** |
-| 7. Thư nháp | "Hi Alex, … your refund request is being reviewed by our team…" (chỉ là nháp, không gửi đi, không hứa hoàn tiền) |
+| 7. Trả lời khách | Chatbot trả lời: "Hi Alex, … your refund request is being reviewed by our team…" (không bao giờ hứa hoàn tiền) |
+| 8. Báo cáo cho đội | Toàn bộ phân tích được gửi vào channel Slack của đội vận hành, tag người phụ trách |
 
-Quản lý bấm **Approve** trên giao diện thì hệ thống mới thực hiện refund (ở dạng giả lập). Bấm **Reject** thì không có gì xảy ra.
+Quản lý bấm **Approve** trên trang **Operation Admin** thì hệ thống mới thực hiện refund (ở dạng giả lập), và kết quả được trả lời ngay trong thread Slack. Bấm **Reject** thì không có gì xảy ra.
 
 ## Luật nghiệp vụ (đã chốt)
 
 | Luật | Ý nghĩa nghiệp vụ |
 |---|---|
 | Chỉ refund cần người duyệt | Mọi quyết định liên quan đến tiền đều do con người chịu trách nhiệm, bất kể số tiền |
-| Không bao giờ gửi tin cho khách | Hệ thống không có khả năng gửi tin; AI chỉ soạn nháp, nhân viên đọc lại rồi tự gửi |
+| Trả lời khách an toàn | Chatbot trả lời như người thật, nhưng mọi câu trả lời đều qua bộ lọc nội dung: không bao giờ hứa hoàn tiền/bồi thường, không lộ thông tin nội bộ |
+| Báo cáo mọi case cho đội | Toàn bộ phân tích được gửi vào Slack và tag người phụ trách |
 | Không tạo ticket trùng | Đã có ticket đang mở thì báo lại cho đội vận hành, tránh 2 người xử lý cùng một việc |
 | Thiếu thông tin thì hỏi lại | Không có mã đơn thì AI tự hỏi khách bằng lời của nó, không đoán; khách trả lời thì AI tiếp tục với đủ ngữ cảnh |
 | Không bịa dữ liệu | Đơn không tồn tại thì nói thẳng "không tìm thấy"; AI không được tra cứu một mã đơn mà khách chưa từng ghi |

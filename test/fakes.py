@@ -7,6 +7,8 @@ from typing import Any
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
+from src.common.schemas import NotificationResult, OperationsReport
+
 _call_ids = count(1)
 
 
@@ -28,3 +30,22 @@ def fake_model(*turns: AIMessage) -> FakeChatModel:
 def tool_call(name: str, **args: Any) -> AIMessage:
     """An assistant turn that calls one tool. With ToolStrategy, the final answer is a call named "AgentProposal"."""
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_{next(_call_ids)}"}])
+
+
+class FakeNotifier:
+    """Records reports and thread replies instead of calling Slack. ``fail=True`` simulates a Slack error."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.posts: list[OperationsReport] = []
+        self.replies: list[tuple[str, str, str]] = []
+
+    def post(self, report: OperationsReport) -> NotificationResult:
+        self.posts.append(report)
+        if self.fail:
+            return NotificationResult(delivered=False, error="SLACK_ERROR: channel_not_found")
+        return NotificationResult(delivered=True, channel="C0TEST", ts=f"{len(self.posts)}.000100")
+
+    def reply(self, channel: str, ts: str, text: str) -> NotificationResult:
+        self.replies.append((channel, ts, text))
+        return NotificationResult(delivered=True, channel=channel, ts=ts)

@@ -1,4 +1,7 @@
-"""Simulated operational actions. Called only by workflow nodes after guardrails, never by the LLM."""
+"""Operational actions. Called only by workflow nodes after guardrails, never by the LLM.
+
+Everything is simulated except the operations notification, which goes to Slack when configured.
+"""
 
 from typing import Any
 
@@ -9,10 +12,12 @@ from src.common.schemas import (
     ApprovalStatus,
     CustomerDraft,
     OperationsNotification,
+    OperationsReport,
     RefundRecord,
     Severity,
 )
 from src.config.settings import today
+from src.integrations.slack import get_notifier
 from src.repositories.action_store import get_action_store
 from src.repositories.data_store import get_data_store
 from src.tools.output import ToolErrorCode, ToolOutput
@@ -25,35 +30,47 @@ _log = get_logger("tools.actions")
 
 
 @tool
-def send_operations_notification(
-    severity: Severity,
-    summary: str,
-    order_id: str | None,
-    recommended_action: str,
-) -> dict[str, Any]:
-    """Alert the operations team (simulated Slack message; nothing is sent externally)."""
+def send_operations_notification(report: OperationsReport) -> dict[str, Any]:
+    """Alert the operations team with the full case report.
+
+    Posted to Slack when configured (decision D7), otherwise logged as a simulated Slack message. A Slack
+    failure is returned as a structured error; it never raises.
+    """
     actions = get_action_store()
+    delivery = get_notifier().post(report)
     notification = OperationsNotification(
         notification_id=actions.next_id("NTF"),
-        channel=OPERATIONS_CHANNEL,
-        severity=severity,
-        summary=summary,
-        order_id=order_id,
-        recommended_action=recommended_action,
+        channel=delivery.channel or OPERATIONS_CHANNEL,
+        severity=Severity.CRITICAL if report.high_value else report.severity,  # R2: high value escalates
+        summary=report.issue_summary,
+        order_id=report.order_id,
+        recommended_action=report.recommended_action,
         created_at=today(),
+        delivery=delivery,
     )
     actions.add_notification(notification)
-    _log.info(
-        "[SIMULATED SLACK]\nChannel: %s\n\n%s PRIORITY\n%s\nRecommended action: %s",
-        OPERATIONS_CHANNEL,
-        severity,
-        summary,
-        recommended_action,
-    )
+    log_context = {
+        "notification_id": notification.notification_id,
+        "severity": notification.severity,
+        "order_id": report.order_id,
+        "delivered": delivery.delivered,
+        "simulated": delivery.simulated,
+    }
+    if not (delivery.delivered or delivery.simulated):
+        return ToolOutput(
+            tool="send_operations_notification",
+            error=ToolErrorCode.NOTIFICATION_FAILED,
+            message=delivery.error or "The notification could not be delivered.",
+            log_context=log_context,
+        ).to_dict()
     return ToolOutput(
         tool="send_operations_notification",
-        data={"notification_id": notification.notification_id, "channel": OPERATIONS_CHANNEL},
-        log_context={"notification_id": notification.notification_id, "severity": severity, "order_id": order_id},
+        data={
+            "notification_id": notification.notification_id,
+            "channel": notification.channel,
+            "delivery": delivery,
+        },
+        log_context=log_context,
     ).to_dict()
 
 
