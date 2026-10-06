@@ -1,0 +1,52 @@
+[project]
+name = "operations-automation-agent"
+version = "0.1.0"
+description = "OpsPilot: an AI operations agent that investigates support requests, applies deterministic guardrails, and routes refunds to human approval."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.142.2",
+    "langchain>=1.4.3",
+    "langchain-openai>=1.6.7",
+    "langgraph>=1.2.13",
+    "langsmith>=0.14.4",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
+    "streamlit>=1.65.0",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+    "types-pyyaml>=6.0.12.20260906",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["."]  # imports are rooted at the repo (`src.config...`), so `src` is first-party
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ASYNC", "S", "PT", "RET", "PL"]
+ignore = [
+    "PLR0913",  # FastAPI deps / tool signatures legitimately take many params
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/**" = ["S101", "PLR2004"]  # asserts and magic numbers are fine in tests
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src"]

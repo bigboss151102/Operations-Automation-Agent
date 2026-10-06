@@ -151,6 +151,10 @@ activemq-data/
 
 # Environments
 .env
+# src/.env/ is a directory: ignore its contents but commit the template
+!src/.env/
+src/.env/*
+!src/.env/.env.example
 .envrc
 .venv
 env/
@@ -218,3 +222,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+.claude/
