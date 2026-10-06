@@ -1,0 +1,12 @@
+[
+  {"subscription_id": "SUB-301", "customer_id": "CUS-102", "status": "active", "plan": "premium", "next_billing_date": "2026-10-15"},
+  {"subscription_id": "SUB-302", "customer_id": "CUS-105", "status": "payment_failed", "plan": "basic", "next_billing_date": "2026-10-12"},
+  {"subscription_id": "SUB-303", "customer_id": "CUS-106", "status": "cancelled", "plan": "basic", "next_billing_date": null},
+  {"subscription_id": "SUB-304", "customer_id": "CUS-112", "status": "paused", "plan": "premium", "next_billing_date": null},
+  {"subscription_id": "SUB-305", "customer_id": "CUS-101", "status": "active", "plan": "basic", "next_billing_date": "2026-10-20"},
+  {"subscription_id": "SUB-306", "customer_id": "CUS-103", "status": "active", "plan": "premium", "next_billing_date": "2026-10-18"},
+  {"subscription_id": "SUB-307", "customer_id": "CUS-107", "status": "active", "plan": "basic", "next_billing_date": "2026-10-25"},
+  {"subscription_id": "SUB-308", "customer_id": "CUS-109", "status": "active", "plan": "premium", "next_billing_date": "2026-10-30"},
+  {"subscription_id": "SUB-309", "customer_id": "CUS-110", "status": "active", "plan": "basic", "next_billing_date": "2026-10-22"},
+  {"subscription_id": "SUB-310", "customer_id": "CUS-111", "status": "active", "plan": "premium", "next_billing_date": "2026-11-01"}
+]

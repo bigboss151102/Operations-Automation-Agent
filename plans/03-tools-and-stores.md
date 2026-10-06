@@ -8,7 +8,7 @@
 
 | File | Content |
 |---|---|
-| `src/utils/ids.py` | `ORDER_ID_RE`, `CUSTOMER_ID_RE`, `is_entity_id(s)`, `extract_ids(text) -> ExtractedIds(order_ids, customer_ids, all)`, `verified_ids_from(messages) -> set[str]` (IDs in human + tool messages). This is the single ID definition, shared with `validate_input` (Phase 6) and `VerifiedIdMiddleware` (Phase 5). |
+| `src/utils/ids.py` | `ORDER_ID_RE`, `CUSTOMER_ID_RE` (compiled from the patterns in `common/schemas/ids.py`), `is_entity_id(s)`, `extract_ids(text) -> ExtractedIds(order_ids, customer_ids, all)`, `verified_ids_from(messages) -> set[str]` (IDs in human + tool messages). This is the single ID definition, shared with `validate_input` (Phase 6) and `VerifiedIdMiddleware` (Phase 5). |
 | `src/repositories/data_store.py` | `DataStore`: loads `data/*.json` once and validates it into `common/schemas/domain.py` models; lookup by ID |
 | `src/repositories/action_store.py` | `ActionStore`: created tickets, notifications, approvals, executed actions; `next_id()`; `reset()` |
 | `src/tools/orders.py` | `get_order` |
@@ -32,7 +32,7 @@
 
 Error codes: `ORDER_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `SUBSCRIPTION_NOT_FOUND`, `INVALID_ID_FORMAT`. Expected failures never raise.
 
-**ID validation:** `ORD-\d{4}`, `CUS-\d{3}`, defined only in `src/utils/ids.py`. A malformed ID returns `INVALID_ID_FORMAT` without a lookup.
+**ID validation:** the patterns `ORD-\d+`, `CUS-\d+` are defined once in `src/common/schemas/ids.py` (Phase 2), and `src/utils/ids.py` compiles regexes from them. Digits are unbounded, so `ORD-999999` is a valid format that is reported as not found (spec Rule 6). A malformed ID (e.g. `ORD-99x`, `1007`) returns `INVALID_ID_FORMAT` without a lookup.
 
 **Read tools** (given to the LLM): `get_order(order_id)`, `get_customer(customer_id)`, `get_support_tickets(customer_id, order_id=None)`, `get_subscription(customer_id)`.
 - `get_order` also returns derived facts: `days_late`, computed from `today(settings)`. The LLM then never has to do date math.
@@ -69,7 +69,7 @@ Error codes: `ORDER_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `SUBSCRIPTION_NOT_FOUND`, 
 - `test_prepare_customer_response_stores_draft_unchanged`
 - `test_fallback_customer_draft_is_safe`: the fallback mentions neither refund nor compensation.
 - `test_registry_separates_read_and_action_tools`: no action tool appears in `READ_TOOLS`.
-- `test_extract_ids` (`utils/ids.py`): finds `ORD-1007` / `CUS-102` in free text, ignores `ORD-99x` and `ORD-123456`.
+- `test_extract_ids` (`utils/ids.py`): finds `ORD-1007`, `CUS-102`, and `ORD-999999` in free text; ignores `ORD-99x`, `XORD-1007`, and a bare `1007`.
 
 ## Acceptance criteria
 

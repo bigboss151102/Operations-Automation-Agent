@@ -1,0 +1,14 @@
+[
+  {"customer_id": "CUS-101", "name": "Maya Chen", "email": "maya.chen@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-102", "name": "Alex Johnson", "email": "alex@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-103", "name": "Priya Patel", "email": "priya.patel@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-104", "name": "Daniel Okafor", "email": "daniel.okafor@example.com", "subscription_status": null},
+  {"customer_id": "CUS-105", "name": "Sofia Rossi", "email": "sofia.rossi@example.com", "subscription_status": "payment_failed"},
+  {"customer_id": "CUS-106", "name": "Liam Murphy", "email": "liam.murphy@example.com", "subscription_status": "cancelled"},
+  {"customer_id": "CUS-107", "name": "Hannah Kim", "email": "hannah.kim@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-108", "name": "Mateo Garcia", "email": "mateo.garcia@example.com", "subscription_status": null},
+  {"customer_id": "CUS-109", "name": "Olivia Brown", "email": "olivia.brown@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-110", "name": "Noah Williams", "email": "noah.williams@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-111", "name": "Emma Schmidt", "email": "emma.schmidt@example.com", "subscription_status": "active"},
+  {"customer_id": "CUS-112", "name": "Lucas Silva", "email": "lucas.silva@example.com", "subscription_status": "paused"}
+]

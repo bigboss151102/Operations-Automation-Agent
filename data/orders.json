@@ -1,0 +1,152 @@
+[
+  {
+    "order_id": "ORD-1001",
+    "customer_id": "CUS-101",
+    "status": "delayed",
+    "order_date": "2026-10-01",
+    "expected_delivery_date": "2026-10-08",
+    "actual_delivery_date": null,
+    "total_amount": 89.50,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1002",
+    "customer_id": "CUS-104",
+    "status": "pending",
+    "order_date": "2026-10-09",
+    "expected_delivery_date": "2026-10-16",
+    "actual_delivery_date": null,
+    "total_amount": 45.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1003",
+    "customer_id": "CUS-103",
+    "status": "processing",
+    "order_date": "2026-10-07",
+    "expected_delivery_date": "2026-10-14",
+    "actual_delivery_date": null,
+    "total_amount": 120.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1004",
+    "customer_id": "CUS-104",
+    "status": "shipped",
+    "order_date": "2026-10-05",
+    "expected_delivery_date": "2026-10-12",
+    "actual_delivery_date": null,
+    "total_amount": 64.99,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1005",
+    "customer_id": "CUS-105",
+    "status": "delivered",
+    "order_date": "2026-09-20",
+    "expected_delivery_date": "2026-09-27",
+    "actual_delivery_date": "2026-09-26",
+    "total_amount": 150.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1006",
+    "customer_id": "CUS-106",
+    "status": "cancelled",
+    "order_date": "2026-09-28",
+    "expected_delivery_date": null,
+    "actual_delivery_date": null,
+    "total_amount": 75.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1007",
+    "customer_id": "CUS-102",
+    "status": "delayed",
+    "order_date": "2026-09-20",
+    "expected_delivery_date": "2026-09-25",
+    "actual_delivery_date": null,
+    "total_amount": 249.99,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1008",
+    "customer_id": "CUS-107",
+    "status": "delayed",
+    "order_date": "2026-09-26",
+    "expected_delivery_date": "2026-10-03",
+    "actual_delivery_date": null,
+    "total_amount": 132.40,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1009",
+    "customer_id": "CUS-108",
+    "status": "delivered",
+    "order_date": "2026-09-24",
+    "expected_delivery_date": "2026-10-01",
+    "actual_delivery_date": "2026-10-02",
+    "total_amount": 39.99,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1010",
+    "customer_id": "CUS-109",
+    "status": "shipped",
+    "order_date": "2026-10-06",
+    "expected_delivery_date": "2026-10-13",
+    "actual_delivery_date": null,
+    "total_amount": 560.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1011",
+    "customer_id": "CUS-110",
+    "status": "delayed",
+    "order_date": "2026-09-23",
+    "expected_delivery_date": "2026-09-30",
+    "actual_delivery_date": null,
+    "total_amount": 210.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1012",
+    "customer_id": "CUS-103",
+    "status": "delivered",
+    "order_date": "2026-09-15",
+    "expected_delivery_date": "2026-09-22",
+    "actual_delivery_date": "2026-09-21",
+    "total_amount": 58.75,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1013",
+    "customer_id": "CUS-101",
+    "status": "delivered",
+    "order_date": "2026-09-01",
+    "expected_delivery_date": "2026-09-08",
+    "actual_delivery_date": "2026-09-07",
+    "total_amount": 32.00,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1014",
+    "customer_id": "CUS-109",
+    "status": "processing",
+    "order_date": "2026-10-08",
+    "expected_delivery_date": "2026-10-15",
+    "actual_delivery_date": null,
+    "total_amount": 95.20,
+    "currency": "USD"
+  },
+  {
+    "order_id": "ORD-1015",
+    "customer_id": "CUS-111",
+    "status": "delayed",
+    "order_date": "2026-09-15",
+    "expected_delivery_date": "2026-09-22",
+    "actual_delivery_date": null,
+    "total_amount": 1200.00,
+    "currency": "USD"
+  }
+]

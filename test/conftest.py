@@ -7,6 +7,7 @@ so tests never depend on the developer's real ``src/.env/.env`` and never call O
 import os
 
 _TEST_ENV = {
+    "OPSPILOT_IGNORE_ENV_FILE": "1",  # never read the developer's real src/.env/.env (or its secrets)
     "OPENAI_API_KEY": "test-key",
     "OPENAI_MODEL": "test-model",
     "LANGSMITH_TRACING": "false",

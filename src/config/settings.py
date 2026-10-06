@@ -1,5 +1,6 @@
 """Application settings loaded from ``src/.env/.env`` and the process environment."""
 
+import os
 from datetime import date
 from functools import cache
 from pathlib import Path
@@ -30,13 +31,20 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
 
+def _env_file() -> Path | None:
+    """The env file to read, or None when disabled (tests set ``OPSPILOT_IGNORE_ENV_FILE=1``)."""
+    return None if os.environ.get("OPSPILOT_IGNORE_ENV_FILE") == "1" else ENV_FILE
+
+
 @cache
 def get_settings() -> Settings:
-    # LangChain and LangSmith read OPENAI_API_KEY / LANGSMITH_* from os.environ directly;
-    # pydantic-settings does not export values, so load the file into the environment too.
-    # Existing environment variables win (override=False).
-    load_dotenv(ENV_FILE, override=False)
-    return Settings()  # required fields come from the environment / env file
+    env_file = _env_file()
+    if env_file is not None:
+        # LangChain and LangSmith read OPENAI_API_KEY / LANGSMITH_* from os.environ directly;
+        # pydantic-settings does not export values, so load the file into the environment too.
+        # Existing environment variables win (override=False).
+        load_dotenv(env_file, override=False)
+    return Settings(_env_file=env_file)  # required fields come from the environment / env file
 
 
 def today(settings: Settings | None = None) -> date:

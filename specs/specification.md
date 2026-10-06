@@ -169,14 +169,17 @@ All customer information must be fictional.
 ```json
 {
   "ticket_id": "TCK-2001",
-  "customer_id": "CUS-102",
-  "order_id": "ORD-1007",
+  "customer_id": "CUS-107",
+  "order_id": "ORD-1008",
   "status": "open",
   "priority": "high",
   "issue_type": "delivery_delay",
-  "created_at": "2026-10-05"
+  "created_at": "2026-10-05",
+  "summary": "Order ORD-1008 past its expected delivery date; carrier investigation requested."
 }
 ```
+
+`order_id` is optional (e.g. subscription tickets). Only `open` and `in_progress` tickets count as existing tickets for duplicate protection (Rule 4).
 
 ---
 
@@ -789,9 +792,19 @@ The agent should never:
 
 # 16. Required Demo Scenarios
 
-> **Status: under revision.** Scenario order IDs, sample data, and expected results will be finalized later (known issue: Scenarios 2 and 3 both use ORD-1007, which conflicts with the open ticket TCK-2001 in Section 7). Do not build sample data around these exact IDs yet.
-
 The demo MUST include at least five scenarios.
+
+All scenarios run against the sample data in `data/` with `REFERENCE_DATE=2026-10-10` as "today", so delays are deterministic: ORD-1001 is 2 days late, ORD-1007 is 15 days late, and ORD-1008 is 7 days late.
+
+| # | Order | Data that drives the outcome | Status | Severity |
+|---|---|---|---|---|
+| 1 | ORD-1001 | Delayed 2 days, $89.50; only a **closed** ticket | `completed` | MEDIUM |
+| 2 | ORD-1007 | Delayed 15 days, $249.99, customer Alex Johnson; **no** open ticket | `awaiting_approval` | HIGH |
+| 3 | ORD-1008 | Delayed 7 days; **open** ticket TCK-2001 (`delivery_delay`) | `completed` | MEDIUM |
+| 4 | ORD-9999 | Does not exist | `not_found` | — |
+| 5 | — | No ID in the message | `needs_more_info` | — |
+| 5b | ORD-1007 | Follow-up reply to Scenario 5 | `awaiting_approval` | HIGH |
+| 6 (opt.) | ORD-1015 | Delayed 18 days, **$1,200** (high value) | `awaiting_approval` | CRITICAL |
 
 ## Scenario 1 — Normal delayed order
 
@@ -805,10 +818,12 @@ Can you check what is happening?
 Expected:
 
 * Retrieve order
-* Detect delay
+* Detect delay (2 days past the expected delivery date)
 * Summarize issue
 * Recommend action
 * No high-risk action
+* Ticket + operations notification run automatically. The earlier ticket TCK-2004 is closed, so it does not block a new one.
+* Severity MEDIUM
 
 ---
 
@@ -824,12 +839,13 @@ I want a refund.
 Expected:
 
 * Retrieve order
-* Detect delivery delay
+* Detect delivery delay (15 days, computed from the data, not from the customer's claim)
 * Detect refund request
-* Create/support or recommend support ticket
-* Prepare customer response
+* Create a support ticket (no open ticket exists for ORD-1007) + operations notification
+* Prepare customer response (draft, addressed to Alex, refund "being reviewed")
 * Request human approval for refund
 * Do NOT issue refund automatically
+* Severity HIGH; status `awaiting_approval`
 
 ---
 
@@ -838,17 +854,17 @@ Expected:
 Input:
 
 ```text
-Please help with my delayed order ORD-1007.
+Please help with my delayed order ORD-1008.
 ```
 
-If an open ticket already exists:
+An open ticket (TCK-2001, `delivery_delay`) already exists for ORD-1008.
 
 Expected:
 
 * Retrieve existing ticket
-* Do not create duplicate ticket
+* Do not create duplicate ticket (`create_support_ticket` → blocked, rule `duplicate_ticket`)
 * Inform operations team or recommend follow-up
-* Explain why a new ticket was not created
+* Explain why a new ticket was not created ("An existing support ticket already exists. Ticket: TCK-2001, Status: open")
 
 ---
 
@@ -889,6 +905,20 @@ is appropriate.
 
 No tool should attempt to retrieve a guessed order.
 
+The LLM phrases the question itself (Rule 5). Guardrails guarantee status `needs_more_info`, no tool execution, and no actions.
+
+## Scenario 5b — Follow-up with the missing ID
+
+Input, sent with Scenario 5's message as `history`:
+
+```text
+It's ORD-1007.
+```
+
+Expected:
+
+* The agent combines both messages and continues as in Scenario 2 (refund → human approval)
+
 ---
 
 # 17. Optional Scenario — High Value Refund
@@ -909,12 +939,14 @@ total_amount = $1,200
 Expected:
 
 ```text
-HIGH / CRITICAL
+CRITICAL
 
 Refund cannot be processed automatically.
 
 Human approval required.
 ```
+
+Severity is CRITICAL because a refund is requested on an order of $500 or more (Section 13). The ticket and operations notification still run automatically, with `critical` priority (decision D2 in Rule 2).
 
 This scenario is useful for demonstrating guardrails.
 

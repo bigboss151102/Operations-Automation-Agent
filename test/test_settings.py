@@ -30,9 +30,15 @@ def test_today_returns_reference_date():
 
 
 def test_today_falls_back_to_real_date_when_reference_unset(monkeypatch):
-    monkeypatch.setenv("REFERENCE_DATE", "")
+    monkeypatch.setenv("REFERENCE_DATE", "")  # empty means "not set" (env_ignore_empty)
     get_settings.cache_clear()
     assert today() == date.today()
+
+
+def test_tests_do_not_read_the_real_env_file(monkeypatch):
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    get_settings.cache_clear()
+    assert get_settings().log_level == "INFO"  # the default, whatever src/.env/.env contains
 
 
 def test_env_file_path_is_independent_of_cwd(monkeypatch, tmp_path):

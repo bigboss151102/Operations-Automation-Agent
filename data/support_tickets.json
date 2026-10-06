@@ -1,0 +1,82 @@
+[
+  {
+    "ticket_id": "TCK-2001",
+    "customer_id": "CUS-107",
+    "order_id": "ORD-1008",
+    "status": "open",
+    "priority": "high",
+    "issue_type": "delivery_delay",
+    "created_at": "2026-10-05",
+    "summary": "Order ORD-1008 past its expected delivery date; carrier investigation requested."
+  },
+  {
+    "ticket_id": "TCK-2002",
+    "customer_id": "CUS-110",
+    "order_id": "ORD-1011",
+    "status": "open",
+    "priority": "high",
+    "issue_type": "refund_request",
+    "created_at": "2026-10-06",
+    "summary": "Customer requested a refund for delayed order ORD-1011."
+  },
+  {
+    "ticket_id": "TCK-2003",
+    "customer_id": "CUS-110",
+    "order_id": "ORD-1011",
+    "status": "open",
+    "priority": "high",
+    "issue_type": "refund_request",
+    "created_at": "2026-10-08",
+    "summary": "Second refund request for ORD-1011 via a different channel."
+  },
+  {
+    "ticket_id": "TCK-2004",
+    "customer_id": "CUS-101",
+    "order_id": "ORD-1001",
+    "status": "closed",
+    "priority": "low",
+    "issue_type": "delivery_delay",
+    "created_at": "2026-10-09",
+    "summary": "Customer asked for a delivery update; tracking link sent and ticket closed."
+  },
+  {
+    "ticket_id": "TCK-2005",
+    "customer_id": "CUS-105",
+    "order_id": "ORD-1005",
+    "status": "resolved",
+    "priority": "medium",
+    "issue_type": "missing_order",
+    "created_at": "2026-09-28",
+    "summary": "Package reported missing; found with a neighbour."
+  },
+  {
+    "ticket_id": "TCK-2006",
+    "customer_id": "CUS-112",
+    "order_id": null,
+    "status": "open",
+    "priority": "medium",
+    "issue_type": "subscription_issue",
+    "created_at": "2026-10-07",
+    "summary": "Customer asked how to resume a paused premium subscription."
+  },
+  {
+    "ticket_id": "TCK-2007",
+    "customer_id": "CUS-106",
+    "order_id": "ORD-1006",
+    "status": "closed",
+    "priority": "low",
+    "issue_type": "cancelled_order",
+    "created_at": "2026-09-29",
+    "summary": "Customer confirmed the cancellation of ORD-1006."
+  },
+  {
+    "ticket_id": "TCK-2008",
+    "customer_id": "CUS-103",
+    "order_id": "ORD-1003",
+    "status": "in_progress",
+    "priority": "low",
+    "issue_type": "address_issue",
+    "created_at": "2026-10-09",
+    "summary": "Customer asked to update the apartment number on ORD-1003."
+  }
+]

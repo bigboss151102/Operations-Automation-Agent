@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **OpsPilot**: a small demo AI agent for a customer-support/operations team (2–4 hour coding-challenge scope). It analyzes a customer request, investigates local sample data with tools, recommends actions, auto-runs safe internal ones (ticket, ops notification, reply draft), and sends **refunds, the only action that needs approval**, to a human. It never sends messages to customers; it only drafts them.
 
-`specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are still under revision.
+`specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: Phase 1 (setup) done. Dependencies are installed, and settings, logging, errors, and `/healthz` exist. Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
+Status: Phases 1–2 done (setup; sample data + shared schemas in `src/common/schemas`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
 
 ## Stack
 
