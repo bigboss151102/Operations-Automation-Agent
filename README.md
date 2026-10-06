@@ -8,15 +8,76 @@ OpsPilot helps a customer-support / operations team handle incoming requests for
 
 ## 1. Problem
 
-Support agents triage every request by hand: they read the message, open several systems (orders, customers, tickets, subscriptions), judge how serious it is, check for an existing ticket, decide what to do, and write a reply. This is slow and inconsistent.
+### Business context
 
-Handing the work to an AI agent naively is dangerous. An LLM can:
+**The company:** a fictional **DTC** (direct-to-consumer) e-commerce business that sells directly to consumers through its own website and also offers **subscription** plans (recurring orders).
 
-- **invent data**, for example describe an order that does not exist;
-- **take a financial action on its own**, such as issuing a refund;
-- **say the wrong thing to a customer**, such as promising a refund nobody approved.
+**The users:** the **Customer Support and Operations** team. Every day they receive a large volume of customer requests:
+
+- Delayed or missing orders
+- Cancelled orders, address changes
+- Refund requests
+- Subscription problems (failed payments, paused plans…)
+
+### The business problem
+
+Today, for every request, an agent does everything by hand:
+
+1. Read the message and work out what the customer wants
+2. Open several systems to look things up: orders, customers, past tickets, subscriptions
+3. Judge how serious the issue is (each person judges differently)
+4. Check whether a ticket already exists, to avoid duplicates
+5. Decide what to do next: create a ticket, alert the operations team, issue a refund…
+6. Write a reply to the customer
+
+This is **slow, repetitive, and inconsistent**. But handing the whole job to an AI is **dangerous**. An AI can:
+
+- **invent data**, for example say an order is on its way when the order does not exist;
+- **issue a refund on its own**, causing direct financial loss;
+- **send the wrong message to a customer**, for example promise a refund nobody approved.
 
 ## 2. Solution
+
+OpsPilot works like **a new team member preparing a case file for their manager**. It does all the research and analysis, handles the small safe tasks itself, and **escalates anything involving money to someone with the authority to decide**.
+
+### A worked example (Scenario 2)
+
+> Customer: *"My order ORD-1007 is 15 days late. I want a refund."*
+
+| Step | What OpsPilot does |
+|---|---|
+| 1. Understand the request | The customer reports a late delivery and wants a refund |
+| 2. Look things up | Order ORD-1007 belongs to Alex Johnson, $249.99, expected on Sep 25, not delivered; no existing ticket |
+| 3. Evidence | "The order is delayed and is 15 days past its expected delivery date". Computed from the data, not taken from the customer's claim |
+| 4. Severity | **HIGH**: the customer wants a refund, and the order is more than 7 days late |
+| 5. Act right away | Create a support ticket, alert the operations team, draft a reply to the customer |
+| 6. Stop and ask for approval | **Refund of $249.99 → waits for a manager's approval** |
+| 7. Reply draft | "Hi Alex, … your refund request is being reviewed by our team…" (a draft only: not sent, and no refund promised) |
+
+Only when the manager clicks **Approve** in the UI does the system issue the (simulated) refund. Clicking **Reject** changes nothing.
+
+### Business rules
+
+| Rule | What it means for the business |
+|---|---|
+| Only refunds need human approval | People stay accountable for every decision involving money, whatever the amount |
+| Never message customers | The system has no way to send messages; the AI only drafts, and a team member reviews and sends |
+| No duplicate tickets | If an open ticket already exists, the operations team is pointed to it, so two people don't work on the same case |
+| Missing information → ask | Without an order ID, the AI asks the customer in its own words instead of guessing; when the customer replies, it continues with the full context |
+| Never invent data | If an order does not exist, the system says "not found". The AI may not look up an order ID the customer never wrote |
+| High-value orders ($500+) | Tickets and alerts are marked `critical` and severity is CRITICAL, so the operations team is alerted immediately |
+| Severity is decided by rules | The AI only understands what the customer wants; LOW / MEDIUM / HIGH / CRITICAL is computed by code from the data, so it is consistent across cases |
+
+The guiding principle of the spec: **"When uncertain, do less rather than more."**
+
+### Who benefits
+
+- **Support agents** no longer open several systems; they get a ready case file with a summary, evidence, and a reply draft.
+- **Operations leads** are alerted to serious cases right away and only approve what truly needs a human (refunds).
+- **Customers** get faster, more consistent responses.
+- **The company** controls financial risk, and every decision is logged and traced in LangSmith for audit.
+
+### How the work is split
 
 OpsPilot splits the work by what each part is good at:
 
