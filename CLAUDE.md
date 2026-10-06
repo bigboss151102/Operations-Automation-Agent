@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: Phases 1–7 done: the full pipeline, the Streamlit demo UI (`src/web/app.py`), and the REST API (`src/api/`) work end to end. Remaining: README, observability check, demo script (Phase 8). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
+Status: all 8 phases done. The pipeline, Streamlit demo UI (`src/web/app.py`), and REST API (`src/api/`) work end to end. The README covers spec §25, and the Loom script is in `docs/demo-script.md`. The build history and per-phase notes are in `plans/`.
 
 ## Stack
 

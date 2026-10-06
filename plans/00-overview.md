@@ -15,7 +15,7 @@ Total budget: **~3.5–4 hours** (spec §27: 2–4 h). Each phase ends with test
 | 5 | LLM investigator + guardrail middleware | [05-llm-investigator.md](05-llm-investigator.md) | 40 min | 3 | ✅ |
 | 6 | Graph, service & human approval | [06-graph-service-hitl.md](06-graph-service-hitl.md) | 40 min | 4, 5 | ✅ |
 | 7 | Streamlit UI & REST API | [07-ui-api.md](07-ui-api.md) | 30 min | 6 | ✅ |
-| 8 | Observability, README & demo | [08-observability-readme-demo.md](08-observability-readme-demo.md) | 30 min | 7 | ☐ |
+| 8 | Observability, README & demo | [08-observability-readme-demo.md](08-observability-readme-demo.md) | 30 min | 7 | ✅ |
 
 Phases 4 and 5 are independent and can be done in either order.
 
@@ -38,9 +38,9 @@ These are proposals. The spec leaves them open, but guardrails and tests depend 
 
 ## Global definition of done
 
-- [ ] All 8 spec tests (§23) pass, plus phase-specific tests: `uv run pytest`
-- [ ] `uv run ruff check . && uv run ruff format --check .`
-- [ ] Five required scenarios (+ optional high-value) work in Streamlit with a real OpenAI key
-- [ ] LangSmith shows one trace per request with `request_id` metadata
-- [ ] README has every section required by spec §25
-- [ ] No secrets committed; `src/.env/.env.example` is committed
+- [x] All 8 spec tests (§23) pass, plus phase-specific tests: `uv run pytest` (199 tests, offline)
+- [x] `uv run ruff check . && uv run ruff format --check .` (+ `mypy` strict)
+- [x] Five required scenarios (+ optional high-value) work in Streamlit with a real OpenAI key (`gpt-4.1-mini`, driven through AppTest against the real service)
+- [x] LangSmith shows one trace per request with `request_id` metadata (verified via the LangSmith API: root `opspilot`, `request_id` + `prompt_versions`)
+- [x] README has every section required by spec §25
+- [x] No secrets committed; `src/.env/.env.example` is committed (verified in a fresh clone)

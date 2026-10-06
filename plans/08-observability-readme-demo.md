@@ -16,11 +16,11 @@
 
 ### Observability check
 
-- [ ] With `LANGSMITH_TRACING=true`, run scenarios 1–6. In LangSmith verify:
+- [x] With `LANGSMITH_TRACING=true`, run scenarios 1–6. In LangSmith verify:
   - one trace per request named `opspilot`;
   - the node tree reads `validate_input → investigate (investigator → tools) → guardrails → execute_actions → human_approval → respond`;
   - `request_id` and `prompt_versions` appear in the metadata.
-- [ ] Logs contain every spec §22 field (`request_id`, intent, tools called, severity, guardrail decisions with rule, executed actions, approval requests). No message text or secrets at INFO.
+- [x] Logs contain every spec §22 field (`request_id`, intent, tools called, severity, guardrail decisions with rule, executed actions, approval requests). No message text or secrets at INFO.
 - [ ] Take 2–3 screenshots (trace tree, guardrail span) for the README/Loom.
 
 ### README (spec §25)
@@ -52,10 +52,10 @@
 
 ### Final quality gate
 
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pytest`
-- [ ] Fresh-clone check: clone to a temp dir, `uv sync`, copy env, run Streamlit + one scenario.
-- [ ] `git status`: no `src/.env/.env`; `src/.env/.env.example` present.
-- [ ] Update `CLAUDE.md` "Status" (no longer scaffold-only).
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pytest`
+- [x] Fresh-clone check: clone to a temp dir, `uv sync`, copy env, run Streamlit + one scenario.
+- [x] `git status`: no `src/.env/.env`; `src/.env/.env.example` present.
+- [x] Update `CLAUDE.md` "Status" (no longer scaffold-only).
 
 ### Loom script (3–5 min, spec §28 Principle 7)
 
@@ -67,3 +67,19 @@
 ## Acceptance criteria
 
 The global definition of done in `00-overview.md` is fully checked.
+
+## Implementation notes
+
+- **LangSmith verified through the API**, not just by eye: a traced S2 run was looked up by `request_id` with `langsmith.Client`. Results:
+  - root run `opspilot`, tags `["opspilot", "dev"]`;
+  - metadata `request_id` and `prompt_versions = {ops_agent_system: 3, customer_response_example: 1}`;
+  - top-level nodes `validate_input → investigate → guardrails → execute_actions → human_approval` (paused for approval);
+  - the `investigator` sub-agent with the three read tools, and a separate `guardrails.evaluate` span.
+- **Screenshots are left to the presenter.** The LangSmith UI requires a login, so capture the trace tree while recording (see `docs/demo-script.md`).
+- **Decision-trail logs** are asserted by `test_decision_trail_is_logged`, which also checks that the customer's text is never logged. The README documents why message *length* + IDs are logged instead of the raw `user_input`.
+- **Fresh clone** from `master`:
+  - `uv sync` (Python 3.14.3) → 199 tests pass;
+  - `src/.env/.env.example` is present and `src/.env/.env` absent;
+  - a real-model run of Scenario 3 returned the blocked duplicate ticket;
+  - the temp clone, including the copied `.env`, was deleted.
+- Loom script: `docs/demo-script.md`.
