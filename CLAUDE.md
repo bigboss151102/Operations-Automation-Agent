@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: Phases 1–3 done (setup; sample data + shared schemas; repositories + LangChain tools in `src/tools`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
+Status: Phases 1–4 done (setup; sample data + shared schemas; repositories + tools; deterministic guardrails in `src/guardrails`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
 
 ## Stack
 

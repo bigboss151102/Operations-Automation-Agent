@@ -1,12 +1,21 @@
 """Pydantic schemas and enums shared across layers. Shapes only: no logic, no I/O."""
 
 from src.common.schemas.actions import ApprovalRequest, CustomerDraft, OperationsNotification, RefundRecord
+from src.common.schemas.decisions import Facts, GuardrailDecision, GuardrailResult, PolicyViolation, SeverityResult
 from src.common.schemas.domain import Customer, Order, Subscription, SupportTicket
 from src.common.schemas.enums import (
     ACTIVE_TICKET_STATUSES,
+    ORDER_INTENTS,
+    ActionName,
     ApprovalStatus,
+    Execution,
+    GuardrailOutcome,
+    Intent,
     IssueType,
     OrderStatus,
+    RequestedAction,
+    Risk,
+    RuleId,
     Severity,
     SubscriptionPlan,
     SubscriptionStatus,
@@ -23,25 +32,41 @@ from src.common.schemas.ids import (
     SubscriptionId,
     TicketId,
 )
+from src.common.schemas.proposal import AgentProposal, ProposedAction
 
 __all__ = [
     "ACTIVE_TICKET_STATUSES",
     "CUSTOMER_ID_PATTERN",
     "ORDER_ID_PATTERN",
+    "ORDER_INTENTS",
     "SUBSCRIPTION_ID_PATTERN",
     "TICKET_ID_PATTERN",
+    "ActionName",
+    "AgentProposal",
     "ApprovalRequest",
     "ApprovalStatus",
     "Customer",
     "CustomerDraft",
     "CustomerId",
+    "Execution",
+    "Facts",
+    "GuardrailDecision",
+    "GuardrailOutcome",
+    "GuardrailResult",
+    "Intent",
     "IssueType",
     "OperationsNotification",
     "Order",
     "OrderId",
     "OrderStatus",
+    "PolicyViolation",
+    "ProposedAction",
     "RefundRecord",
+    "RequestedAction",
+    "Risk",
+    "RuleId",
     "Severity",
+    "SeverityResult",
     "Subscription",
     "SubscriptionId",
     "SubscriptionPlan",

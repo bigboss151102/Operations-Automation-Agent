@@ -12,7 +12,7 @@
 | `src/prompts/loader.py` | `Prompt`, `load_prompt(name)` (YAML frontmatter, `$var` render) |
 | `src/prompts/ops_agent_system.md` | System prompt v1 (`variables: [customer_response_example]`) |
 | `src/prompts/customer_response_example.md` | Example customer reply the LLM follows for `customer_response_draft` (D4) |
-| `src/common/schemas/proposal.py` | `AgentProposal`, `ProposedAction` (shared: the investigator produces them, guardrails read them) |
+| `src/common/schemas/proposal.py` | **Already created in Phase 4** (guardrails needed it). `AgentProposal`, `ProposedAction` with `Field(description=...)` on every field. In this phase, only review the descriptions against the prompt |
 | `src/guardrails/middleware.py` | `VerifiedIdMiddleware` (`wrap_tool_call`): Rule 7, layer 1 |
 | `src/agents/investigator.py` | `build_investigator(model, *, model_call_limit=8, tool_call_limit=10)` with the middleware stack below |
 | `test/test_prompts.py` | Prompt files load and render |

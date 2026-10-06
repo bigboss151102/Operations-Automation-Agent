@@ -14,6 +14,12 @@
 | `src/guardrails/rules.py` | `evaluate(proposal, facts, *, high_value_threshold) -> GuardrailResult` |
 | `src/guardrails/draft_policy.py` | `check_customer_draft(text) -> list[PolicyViolation]` (R8, decision D4) |
 | `test/test_guardrails.py` | Spec Tests 4, 5, 6 + severity + ID checks |
+| *(added during implementation)* `src/common/schemas/proposal.py` | `AgentProposal` / `ProposedAction`, moved up from Phase 5 because guardrails consume it |
+| *(added)* enums | `Intent`, `ORDER_INTENTS`, `RequestedAction`, `ActionName`, `Risk`, `Execution` (`automatic` / `human_approval` / `blocked`, matching spec §14), `RuleId`, `GuardrailOutcome` |
+
+Implementation notes:
+- Stop-rule precedence is **R7 → R5 → R6**. A proposal that names an ID nobody wrote is treated as a hallucination even when information is also missing.
+- `GuardrailResult.priority` is the ticket priority / notification level for the case: severity mapped to priority, or `critical` for high-value orders (R2).
 
 ## Inputs
 

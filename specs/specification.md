@@ -1051,7 +1051,7 @@ Operations-Automation-Agent/
 │   │       ├── domain.py        # Order, Customer, SupportTicket, Subscription
 │   │       ├── actions.py       # OperationsNotification, CustomerDraft, ApprovalRequest, RefundRecord
 │   │       ├── proposal.py      # AgentProposal, ProposedAction (LLM structured output)
-│   │       ├── decisions.py     # Facts, GuardrailDecision (guardrails input/output)
+│   │       ├── decisions.py     # Facts, GuardrailDecision, GuardrailResult, PolicyViolation (guardrails I/O)
 │   │       └── response.py      # AnalyzeResponse + nested models (shared by API and Streamlit)
 │   │
 │   ├── llm/
@@ -1073,6 +1073,7 @@ Operations-Automation-Agent/
 │   ├── guardrails/              # Deterministic guardrails — never call an LLM
 │   │   ├── rules.py             # Business rules R1–R7 as pure functions (no LangChain imports)
 │   │   ├── severity.py          # LOW / MEDIUM / HIGH / CRITICAL classification (no LangChain imports)
+│   │   ├── draft_policy.py      # R8: content policy for the LLM's customer reply draft (no LangChain imports)
 │   │   └── middleware.py        # VerifiedIdMiddleware (wrap_tool_call) for the investigator agent
 │   │
 │   ├── repositories/            # Data access (repository pattern) — used by tools and guardrails node
