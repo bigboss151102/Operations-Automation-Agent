@@ -120,7 +120,7 @@ Rules for this file:
 - [ ] `investigator.py`:
   - `create_agent(model, tools=READ_TOOLS, system_prompt=..., response_format=ToolStrategy(AgentProposal), middleware=[<stack above>], name="investigator")`
   - Expose the limits as parameters so tests can use small values.
-- [ ] `FakeChatModel` + `tool_call()` helper in `test/conftest.py`.
+- [x] `FakeChatModel` + `fake_model()` + `tool_call()` helpers in `test/fakes.py`. Not in `conftest.py`: pytest discourages importing from conftest.
 - [ ] **Manual smoke test with real OpenAI** (needs `src/.env/.env`): run the investigator on scenario 2 and 4 texts in a scratch script, and check that the proposal is sensible. Tune the prompt and bump `version` if needed.
 
 ## Tests
@@ -145,6 +145,21 @@ Rules for this file:
 
 - Tests pass without network access.
 - The manual smoke test with the real model produces valid proposals for scenarios 1–4.
+
+## Implementation notes (smoke test with `gpt-4.1-mini`)
+
+Prompt `ops_agent_system` went v1 → v2 after the real-model smoke test:
+
+| Finding (v1) | Fix (v2) |
+|---|---|
+| Scenario 1 draft claimed "a new support ticket has been created" before guardrails decided | The Customer response section forbids claiming any action was completed; describe next steps in general terms |
+| Scenario 3: the model saw the open ticket and **skipped** `create_support_ticket` and the notification, making the duplicate decision itself instead of the deterministic rule R4 | Instructions step 5: for late/missing orders always propose ticket + notification, even if a ticket exists; the rules decide duplicates. Verified 3/3 runs |
+| Scenario 3 draft mentioned a "high-priority support ticket" (R8 caught it) | Forbid mentioning tickets, their status or priority, or any internal record |
+
+Final v2 pass, all scenarios:
+- S1–S3 and S6: 3 tool calls, correct actions, 0 draft violations.
+- S4: `ORDER_NOT_FOUND`, no actions.
+- S5: no tool calls, `missing_fields=["order_id"]`, the LLM asks for the order ID in its own words.
 
 ## Out of scope
 

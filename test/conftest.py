@@ -2,6 +2,7 @@
 
 Environment defaults are set at import time, before any ``src`` module reads settings,
 so tests never depend on the developer's real ``src/.env/.env`` and never call OpenAI or LangSmith.
+LLM test doubles live in ``test/fakes.py``.
 """
 
 import os

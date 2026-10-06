@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: Phases 1–4 done (setup; sample data + shared schemas; repositories + tools; deterministic guardrails in `src/guardrails`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
+Status: Phases 1–5 done (setup; sample data + shared schemas; repositories + tools; deterministic guardrails; LLM investigator in `src/agents/investigator.py` with prompts in `src/prompts/`). Agent features are built phase by phase following `plans/` (`plans/00-overview.md` tracks progress).
 
 ## Stack
 
@@ -60,7 +60,7 @@ Every instruction sent to the LLM is a Markdown file in `src/prompts/<name>.md`,
 - `.gitignore` ignores the whole `src/.env/` directory except `.env.example`, which must stay committed (spec deliverable).
 - Code before `interrupt()` re-runs when the graph resumes. Keep it idempotent.
 - `langgraph.prebuilt.create_react_agent` is legacy. Use `langchain.agents.create_agent`.
-- `GenericFakeChatModel.bind_tools` raises `NotImplementedError`. Tests use a subclass that overrides it (see the `llm-engineering` skill). Tests never call OpenAI or LangSmith (`LANGSMITH_TRACING=false`).
+- `GenericFakeChatModel.bind_tools` raises `NotImplementedError`. Tests use `FakeChatModel` from `test/fakes.py`, which overrides it; script model turns with `fake_model(...)` and `tool_call(...)`. Tests never call OpenAI or LangSmith (`LANGSMITH_TRACING=false`).
 - `.claude/` is gitignored, so project skills are not committed.
 
 ## Project skills
