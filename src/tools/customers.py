@@ -3,8 +3,10 @@ from typing import Any
 from langchain_core.tools import tool
 
 from src.repositories.data_store import get_data_store
-from src.tools._results import dump, fail, ok
+from src.tools.output import ToolErrorCode, ToolOutput
 from src.utils.ids import is_customer_id
+
+_TOOL = "get_customer"
 
 
 @tool
@@ -16,14 +18,17 @@ def get_customer(customer_id: str) -> dict[str, Any]:
     If the customer does not exist, returns success=false with error CUSTOMER_NOT_FOUND.
     """
     if not is_customer_id(customer_id):
-        return fail(
-            "get_customer",
-            "INVALID_ID_FORMAT",
-            f"'{customer_id}' is not a valid customer ID (expected CUS-<digits>).",
-        )
+        return ToolOutput(
+            tool=_TOOL,
+            error=ToolErrorCode.INVALID_ID_FORMAT,
+            message=f"'{customer_id}' is not a valid customer ID (expected CUS-<digits>).",
+        ).to_dict()
     customer = get_data_store().customer(customer_id)
     if customer is None:
-        return fail(
-            "get_customer", "CUSTOMER_NOT_FOUND", f"Customer {customer_id} was not found.", customer_id=customer_id
-        )
-    return ok("get_customer", {"customer": dump(customer)}, customer_id=customer_id)
+        return ToolOutput(
+            tool=_TOOL,
+            error=ToolErrorCode.CUSTOMER_NOT_FOUND,
+            message=f"Customer {customer_id} was not found.",
+            log_context={"customer_id": customer_id},
+        ).to_dict()
+    return ToolOutput(tool=_TOOL, data={"customer": customer}, log_context={"customer_id": customer_id}).to_dict()

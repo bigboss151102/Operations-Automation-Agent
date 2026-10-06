@@ -4,9 +4,11 @@ from langchain_core.tools import tool
 
 from src.config.settings import today
 from src.repositories.data_store import get_data_store
-from src.tools._results import dump, fail, ok
+from src.tools.output import ToolErrorCode, ToolOutput
 from src.utils import dates
 from src.utils.ids import is_order_id
+
+_TOOL = "get_order"
 
 
 @tool
@@ -19,9 +21,22 @@ def get_order(order_id: str) -> dict[str, Any]:
     If the order does not exist, returns success=false with error ORDER_NOT_FOUND. Never guess an ID.
     """
     if not is_order_id(order_id):
-        return fail("get_order", "INVALID_ID_FORMAT", f"'{order_id}' is not a valid order ID (expected ORD-<digits>).")
+        return ToolOutput(
+            tool=_TOOL,
+            error=ToolErrorCode.INVALID_ID_FORMAT,
+            message=f"'{order_id}' is not a valid order ID (expected ORD-<digits>).",
+        ).to_dict()
     order = get_data_store().order(order_id)
     if order is None:
-        return fail("get_order", "ORDER_NOT_FOUND", f"Order {order_id} was not found.", order_id=order_id)
+        return ToolOutput(
+            tool=_TOOL,
+            error=ToolErrorCode.ORDER_NOT_FOUND,
+            message=f"Order {order_id} was not found.",
+            log_context={"order_id": order_id},
+        ).to_dict()
     late = dates.days_late(order.expected_delivery_date, order.actual_delivery_date, today())
-    return ok("get_order", {"order": dump(order), "days_late": late}, order_id=order_id)
+    return ToolOutput(
+        tool=_TOOL,
+        data={"order": order, "days_late": late},
+        log_context={"order_id": order_id},
+    ).to_dict()

@@ -15,7 +15,7 @@ from src.common.schemas import (
 from src.config.settings import today
 from src.repositories.action_store import get_action_store
 from src.repositories.data_store import get_data_store
-from src.tools._results import dump, fail, ok
+from src.tools.output import ToolErrorCode, ToolOutput
 from src.utils.logging import get_logger
 
 OPERATIONS_CHANNEL = "#operations-alerts"
@@ -50,13 +50,11 @@ def send_operations_notification(
         summary,
         recommended_action,
     )
-    return ok(
-        "send_operations_notification",
-        {"notification_id": notification.notification_id, "channel": OPERATIONS_CHANNEL},
-        notification_id=notification.notification_id,
-        severity=severity,
-        order_id=order_id,
-    )
+    return ToolOutput(
+        tool="send_operations_notification",
+        data={"notification_id": notification.notification_id, "channel": OPERATIONS_CHANNEL},
+        log_context={"notification_id": notification.notification_id, "severity": severity, "order_id": order_id},
+    ).to_dict()
 
 
 @tool
@@ -81,11 +79,11 @@ def prepare_customer_response(
         created_at=today(),
     )
     actions.add_draft(record)
-    return ok(
-        "prepare_customer_response",
-        {"draft_id": record.draft_id, "draft": record.draft},
-        draft_id=record.draft_id,
-    )
+    return ToolOutput(
+        tool="prepare_customer_response",
+        data={"draft_id": record.draft_id, "draft": record.draft},
+        log_context={"draft_id": record.draft_id},
+    ).to_dict()
 
 
 def fallback_customer_draft(customer_name: str, order_id: str | None = None) -> str:
@@ -121,18 +119,17 @@ def request_human_approval(action: str, reason: str, context: dict[str, Any], re
             created_at=today(),
         )
         actions.save_approval(approval)
-    return ok(
-        "request_human_approval",
-        dump(approval),
-        approval_id=approval.approval_id,
-        action=action,
-        status=approval.status,
-    )
+    return ToolOutput(
+        tool="request_human_approval",
+        data=approval.model_dump(mode="json"),  # flat, as in the spec Tool 8 example
+        log_context={"approval_id": approval.approval_id, "action": action, "status": approval.status},
+    ).to_dict()
 
 
 @tool
 def issue_refund(order_id: str, amount: float, approval_id: str) -> dict[str, Any]:
     """Issue a refund (simulated). Refuses unless a human approved this exact refund."""
+    name = "issue_refund"
     approval = get_action_store().approval(approval_id)
     if (
         approval is None
@@ -140,23 +137,27 @@ def issue_refund(order_id: str, amount: float, approval_id: str) -> dict[str, An
         or approval.status is not ApprovalStatus.APPROVED
         or approval.context.get("order_id") != order_id
     ):
-        return fail(
-            "issue_refund",
-            "REFUND_NOT_APPROVED",
-            f"No approved refund request {approval_id} for order {order_id}.",
-            order_id=order_id,
-            approval_id=approval_id,
-        )
+        return ToolOutput(
+            tool=name,
+            error=ToolErrorCode.REFUND_NOT_APPROVED,
+            message=f"No approved refund request {approval_id} for order {order_id}.",
+            log_context={"order_id": order_id, "approval_id": approval_id},
+        ).to_dict()
     order = get_data_store().order(order_id)
     if order is None:
-        return fail("issue_refund", "ORDER_NOT_FOUND", f"Order {order_id} was not found.", order_id=order_id)
+        return ToolOutput(
+            tool=name,
+            error=ToolErrorCode.ORDER_NOT_FOUND,
+            message=f"Order {order_id} was not found.",
+            log_context={"order_id": order_id},
+        ).to_dict()
     if not 0 < amount <= order.total_amount:
-        return fail(
-            "issue_refund",
-            "INVALID_REFUND_AMOUNT",
-            f"Refund amount {amount} must be positive and at most the order total {order.total_amount}.",
-            order_id=order_id,
-        )
+        return ToolOutput(
+            tool=name,
+            error=ToolErrorCode.INVALID_REFUND_AMOUNT,
+            message=f"Refund amount {amount} must be positive and at most the order total {order.total_amount}.",
+            log_context={"order_id": order_id},
+        ).to_dict()
 
     actions = get_action_store()
     refund = RefundRecord(
@@ -175,10 +176,8 @@ def issue_refund(order_id: str, amount: float, approval_id: str) -> dict[str, An
         order_id,
         approval_id,
     )
-    return ok(
-        "issue_refund",
-        {"refund_id": refund.refund_id, "refund": dump(refund)},
-        refund_id=refund.refund_id,
-        order_id=order_id,
-        approval_id=approval_id,
-    )
+    return ToolOutput(
+        tool=name,
+        data={"refund_id": refund.refund_id, "refund": refund},
+        log_context={"refund_id": refund.refund_id, "order_id": order_id, "approval_id": approval_id},
+    ).to_dict()
