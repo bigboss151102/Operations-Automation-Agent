@@ -5,7 +5,7 @@ so every layer agrees on what counts as an ID the customer actually wrote.
 """
 
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -62,10 +62,21 @@ class _Message(Protocol):
     content: Any
 
 
-def verified_ids_from(messages: Iterable[_Message]) -> set[str]:
-    """IDs the customer wrote (human messages) or that tools returned (tool messages)."""
+def verified_ids_from(messages: Iterable[_Message], *, trusted_tools: Collection[str] | None = None) -> set[str]:
+    """IDs the customer wrote (human messages) or that a tool successfully returned.
+
+    Not trusted: the model's own words (AI messages), failed tool calls (``status="error"``; e.g. an
+    ``UNVERIFIED_ID`` message quotes the guessed ID), and, when ``trusted_tools`` is given, any other
+    tool message, such as the structured-output tool that echoes the model's own proposal.
+    """
     verified: set[str] = set()
     for message in messages:
-        if message.type in ("human", "tool"):
+        if message.type == "human":
+            verified |= extract_ids(str(message.content)).all
+        elif message.type == "tool":
+            if getattr(message, "status", "success") == "error":
+                continue
+            if trusted_tools is not None and getattr(message, "name", None) not in trusted_tools:
+                continue
             verified |= extract_ids(str(message.content)).all
     return verified

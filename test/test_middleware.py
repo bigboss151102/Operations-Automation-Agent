@@ -43,6 +43,17 @@ def test_unverified_id_lookup_is_blocked():
     assert json.loads(result.content)["error"] == "UNVERIFIED_ID"
 
 
+def test_retrying_a_blocked_id_is_still_blocked():
+    # The UNVERIFIED_ID error message quotes the guessed ID; it must not make that ID "verified".
+    results = _run_spy_agent(
+        tool_call("lookup_order", order_id="ORD-5555"),
+        tool_call("lookup_order", order_id="ORD-5555"),
+        message="My order ORD-1007 is late",
+    )
+    assert CALLS == []
+    assert [json.loads(r.content)["error"] for r in results] == ["UNVERIFIED_ID", "UNVERIFIED_ID"]
+
+
 def test_guessed_id_is_blocked_when_the_customer_wrote_none():  # spec Scenario 5
     (result,) = _run_spy_agent(tool_call("lookup_order", order_id="ORD-1001"), message="My order hasn't arrived")
     assert CALLS == []
