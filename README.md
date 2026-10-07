@@ -94,6 +94,121 @@ If information is missing, OpsPilot asks for it. If a record does not exist, it 
 
 ## 3. Architecture
 
+### System architecture
+
+The whole system, from the people using it down to where data lives. An editable version of this diagram is in [`docs/architecture.drawio`](docs/architecture.drawio) (open it at [app.diagrams.net](https://app.diagrams.net)).
+
+```mermaid
+flowchart TB
+    subgraph clients["Clients"]
+        customer(["Customer"])
+        admin(["Ops admin"])
+        apiclient(["API client"])
+    end
+
+    subgraph presentation["Presentation layer"]
+        chat["Streamlit · Chat page"]
+        adminpage["Streamlit · Operation Admin<br>Cases · Tickets · Approve/Reject"]
+        api["FastAPI<br>POST /api/v1/agent/analyze"]
+    end
+
+    subgraph application["Application layer"]
+        service["Agent service<br>run_agent · resume_agent · get_case · list_cases · list_tickets"]
+    end
+
+    subgraph orchestration["Agent orchestration · LangGraph StateGraph"]
+        direction LR
+        validate["validate_input"] --> investigate["investigate<br>(LLM)"] --> guard["guardrails"] --> execute["execute_actions"] --> notify["notify_operations"] --> approval["human_approval<br>interrupt()"] --> respond["respond"]
+    end
+
+    subgraph investigator["Investigator · LangChain create_agent"]
+        prompts["Versioned prompts (.md)"]
+        middleware["Middleware: VerifiedId · PII · call limits"]
+        proposal["AgentProposal (structured output)"]
+    end
+
+    subgraph guardrails["Guardrails · deterministic"]
+        rules["Rules R1–R8"]
+        severity["Severity table"]
+    end
+
+    subgraph tools["Tools · LangChain @tool"]
+        readtools["Read tools (LLM)<br>get_order · get_customer<br>get_support_tickets · get_subscription"]
+        actiontools["Action tools (graph nodes only)<br>create_support_ticket · prepare_customer_response<br>request_human_approval · issue_refund<br>send_operations_notification"]
+    end
+
+    subgraph data["Data layer (demo: JSON + in-memory)"]
+        opsdata[("Operational data · JSON<br>orders · customers · tickets · subscriptions")]
+        actionstore[("Action store<br>tickets · approvals · refunds · drafts · notifications")]
+        casestore[("Case store<br>one CaseRecord per request")]
+        checkpointer[("Checkpointer<br>InMemorySaver · thread_id = request_id")]
+    end
+
+    subgraph external["External services"]
+        openai{{"OpenAI"}}
+        slack{{"Slack"}}
+        langsmith{{"LangSmith"}}
+    end
+
+    customer --> chat
+    admin --> adminpage
+    apiclient --> api
+    chat -- "run_agent · poll get_case" --> service
+    adminpage -- "resume_agent · list_cases" --> service
+    api -- "run_agent" --> service
+    service --> validate
+    service -- "save / read" --> casestore
+    investigate --> investigator
+    investigator -- "LLM calls" --> openai
+    middleware -- "verified tool calls" --> readtools
+    guard --> guardrails
+    execute -- "allowed actions" --> actiontools
+    notify -- "approvals + report" --> actiontools
+    approval -- "issue_refund if approved" --> actiontools
+    readtools -- "read" --> opsdata
+    readtools -. "created tickets (R4)" .-> actionstore
+    actiontools -- "write" --> actionstore
+    actiontools -- "chat.postMessage · thread reply" --> slack
+    approval -- "pause / resume" --> checkpointer
+    orchestration -. "traces" .-> langsmith
+```
+
+**Components** (left: what the demo uses; right: what it would become in production, see §8):
+
+| Layer | Component | Demo implementation | Production equivalent |
+|---|---|---|---|
+| Clients | Customer, ops admin, API client | Browser / HTTP | Same, behind auth |
+| Presentation | Chat page | Streamlit `views/chat.py`; polls the case every 3 s while a refund is pending | Web/mobile chat widget, push updates (websocket) |
+| Presentation | Operation Admin page | Streamlit `views/admin.py`: Cases tab (reports, Approve/Reject), Tickets tab | Internal back-office app with RBAC |
+| Presentation | REST API | FastAPI `src/api/`: `POST /api/v1/agent/analyze`, `GET /healthz` | Same, plus a resume endpoint, auth, rate limits |
+| Application | Agent service | `src/agents/service.py`: the only entry point for UI and API | Same; stateless workers behind a queue |
+| Orchestration | Agent pipeline | LangGraph `StateGraph`, 7 nodes (see below) | Same |
+| Orchestration | Human-in-the-loop | `interrupt()` + `Command(resume=...)` | Same, with a durable approval queue |
+| Agent | Investigator | `create_agent` + `init_chat_model("openai:…")`, read tools only, `AgentProposal` via `ToolStrategy` | Same, gated by LangSmith evals |
+| Agent | Prompts | Versioned Markdown in `src/prompts/` | Same, or LangSmith prompt hub |
+| Guardrails | Layer 1 | LangChain middleware: `VerifiedIdMiddleware`, `PIIMiddleware`, call limits | Same |
+| Guardrails | Layer 2 | Pure functions: severity table, rules R1–R8 | Same, rules loaded from config |
+| Tools | Read tools | Query the data layer | Call the order / CRM / ticketing / billing APIs |
+| Tools | Action tools | Simulated, recorded in the action store; Slack is real | Ticketing (Zendesk/Jira), payments (Stripe) with idempotency keys |
+| Data | Operational data | JSON files in `data/` (read-only) | Order DB, CRM, ticketing system |
+| Data | Action store | In-memory (`repositories/action_store.py`) | Postgres tables + audit log |
+| Data | Case store | In-memory (`repositories/case_store.py`) | Postgres |
+| Data | Checkpointer | LangGraph `InMemorySaver` (`memory/checkpointer.py`) | LangGraph `PostgresSaver` |
+| External | LLM | OpenAI (`OPENAI_MODEL`, e.g. `gpt-4.1-mini`) | Same, with a fallback model |
+| External | Notifications | Slack bot (`chat.postMessage`); simulated when `SLACK_*` is unset | Same |
+| External | Observability | LangSmith traces + `key=value` logs | LangSmith + log aggregation and alerts |
+
+**Main flows:**
+
+1. **Customer request.** Chat (or the API) → `run_agent` → the pipeline runs once → the reply is shown in the chat and the case is saved in the case store.
+2. **Investigation.** `investigate` calls OpenAI; the model may only call the 4 read tools, and middleware blocks any ID the customer never wrote. Output: an `AgentProposal`.
+3. **Decision.** `guardrails` re-reads the data and decides per action: automatic, human approval, or blocked. No LLM is involved.
+4. **Actions.** `execute_actions` creates the ticket and the reply draft; `notify_operations` creates refund approvals and posts the full report to Slack, tagging the team.
+5. **Approval.** `human_approval` pauses (`interrupt()`); the state is kept in the checkpointer. In Operation Admin, Approve/Reject → `resume_agent` → `issue_refund` (if approved) → a Slack thread reply → the chat tells the customer the outcome.
+6. **Observability.** Every run is traced in LangSmith with `request_id` and prompt versions.
+
+### Agent pipeline (inside the orchestration layer)
+
 ```text
                         ┌──────────────────────┐
                         │   Customer request   │  Chat page (Streamlit) · REST API
@@ -153,6 +268,7 @@ The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval u
 | `src/api/` | FastAPI endpoint: a thin adapter over `service.py` |
 | `data/` | Fictional sample data: 15 orders, 12 customers, 8 tickets, 10 subscriptions |
 | `specs/`, `plans/` | Specification and the phase-by-phase implementation plan |
+| `docs/` | `architecture.drawio` (system diagram), `demo-script.md` (Loom script), `business-overview.md` (Vietnamese) |
 
 ## 4. Key Design Decisions
 
