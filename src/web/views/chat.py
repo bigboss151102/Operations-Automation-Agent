@@ -42,16 +42,18 @@ def reply_for(response: AnalyzeResponse) -> str:
     return response.customer_response or FALLBACK_REPLY
 
 
-def _handle(message: str) -> None:
+def _handle(message: str) -> str:
+    """Run the agent for one customer message; record both sides and return the reply."""
     history = list(st.session_state.chat_history)
     st.session_state.chat_messages.append({"role": "user", "content": message})
-    with st.spinner("Looking into it…"):
-        response = run_agent(message, history, graph=graph())
-    st.session_state.chat_messages.append({"role": "assistant", "content": reply_for(response)})
+    response = run_agent(message, history, graph=graph())
+    reply = reply_for(response)
+    st.session_state.chat_messages.append({"role": "assistant", "content": reply})
     # Keep the context only while the assistant is waiting for missing information.
     st.session_state.chat_history = [*history, message] if response.status is ResponseStatus.NEEDS_MORE_INFO else []
     if response.status is ResponseStatus.AWAITING_APPROVAL:
         st.session_state.chat_waiting = {**st.session_state.chat_waiting, response.request_id: 0}
+    return reply
 
 
 def deliver_decisions() -> bool:
@@ -96,12 +98,20 @@ st.caption("Ask about a delayed, missing, or cancelled order, a refund, or your 
 prompt = st.chat_input("Describe your issue…", key="chat_input")
 queued = st.session_state.chat_queued
 st.session_state.chat_queued = None
-if message := (prompt or queued or "").strip():
-    _handle(message)
 deliver_decisions()
-if st.session_state.chat_waiting:
-    _watch_decisions()
 
 for entry in st.session_state.chat_messages:
     with st.chat_message(entry["role"]):
         st.markdown(as_markdown(entry["content"]))
+
+# Show the customer's message right away, then the reply once the agent has finished.
+if message := (prompt or queued or "").strip():
+    with st.chat_message("user"):
+        st.markdown(as_markdown(message))
+    with st.chat_message("assistant"):
+        with st.spinner("Looking into it…"):
+            reply = _handle(message)
+        st.markdown(as_markdown(reply))
+
+if st.session_state.chat_waiting:
+    _watch_decisions()
