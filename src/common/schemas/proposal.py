@@ -34,8 +34,10 @@ class AgentProposal(Record):
         description='Information needed but not provided, e.g. ["order_id"]. [] if nothing is missing.'
     )
     clarification_question: str | None = Field(
-        description="Required when missing_fields is non-empty: a short, polite question asking for exactly that. "
-        "Otherwise null."
+        description="Required when missing_fields is non-empty; it is shown to the customer as the chat reply, in "
+        "the language of their latest message. For missing information: a short, polite question asking for "
+        "exactly that. For small talk: a warm reply that first answers what the customer said (return a greeting, "
+        "say you're welcome, or explain what you can help with), then offers help. Otherwise null."
     )
     customer_response_draft: str | None = Field(
         description="The complete reply draft following the example template. Required whenever "
