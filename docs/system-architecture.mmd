@@ -1,0 +1,72 @@
+flowchart TB
+    subgraph clients["Clients"]
+        customer(["Customer"])
+        admin(["Ops admin"])
+        apiclient(["API client"])
+    end
+
+    subgraph presentation["Presentation layer"]
+        chat["Streamlit · Chat page"]
+        adminpage["Streamlit · Operation Admin<br>Cases · Tickets · Approve/Reject"]
+        api["FastAPI<br>POST /api/v1/agent/analyze"]
+    end
+
+    subgraph application["Application layer"]
+        service["Agent service<br>run_agent · resume_agent · get_case · list_cases · list_tickets"]
+    end
+
+    subgraph orchestration["Agent orchestration · LangGraph StateGraph"]
+        direction LR
+        validate["validate_input"] --> investigate["investigate<br>(LLM)"] --> guard["guardrails"] --> execute["execute_actions"] --> notify["notify_operations"] --> approval["human_approval<br>interrupt()"] --> respond["respond"]
+    end
+
+    subgraph investigator["Investigator · LangChain create_agent"]
+        prompts["Versioned prompts (.md)"]
+        middleware["Middleware: VerifiedId · PII · call limits"]
+        proposal["AgentProposal (structured output)"]
+    end
+
+    subgraph guardrails["Guardrails · deterministic"]
+        rules["Rules R1–R8"]
+        severity["Severity table"]
+    end
+
+    subgraph tools["Tools · LangChain @tool"]
+        readtools["Read tools (LLM)<br>get_order · get_customer<br>get_support_tickets · get_subscription"]
+        actiontools["Action tools (graph nodes only)<br>create_support_ticket · prepare_customer_response<br>request_human_approval · issue_refund<br>send_operations_notification"]
+    end
+
+    subgraph data["Data layer (demo: JSON + in-memory)"]
+        opsdata[("Operational data · JSON<br>orders · customers · tickets · subscriptions")]
+        actionstore[("Action store<br>tickets · approvals · refunds · drafts · notifications")]
+        casestore[("Case store<br>one CaseRecord per request")]
+        checkpointer[("Checkpointer<br>InMemorySaver · thread_id = request_id")]
+    end
+
+    subgraph external["External services"]
+        openai{{"OpenAI"}}
+        slack{{"Slack"}}
+        langsmith{{"LangSmith"}}
+    end
+
+    customer --> chat
+    admin --> adminpage
+    apiclient --> api
+    chat -- "run_agent · poll get_case" --> service
+    adminpage -- "resume_agent · list_cases" --> service
+    api -- "run_agent" --> service
+    service --> validate
+    service -- "save / read" --> casestore
+    investigate --> investigator
+    investigator -- "LLM calls" --> openai
+    middleware -- "verified tool calls" --> readtools
+    guard --> guardrails
+    execute -- "allowed actions" --> actiontools
+    notify -- "approvals + report" --> actiontools
+    approval -- "issue_refund if approved" --> actiontools
+    readtools -- "read" --> opsdata
+    readtools -. "created tickets (R4)" .-> actionstore
+    actiontools -- "write" --> actionstore
+    actiontools -- "chat.postMessage · thread reply" --> slack
+    approval -- "pause / resume" --> checkpointer
+    orchestration -. "traces" .-> langsmith

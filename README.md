@@ -209,6 +209,13 @@ flowchart TB
 
 ### Agent pipeline (inside the orchestration layer)
 
+![OpsPilot LangGraph flow](docs/langgraph-flow.png)
+
+Purple: the only LLM step. Green: deterministic code. Orange: human-in-the-loop. Dashed edges are the conditional early exits to `respond`. Source: [`docs/langgraph-flow.mmd`](docs/langgraph-flow.mmd); the structure matches `build_graph(...).get_graph()`.
+
+<details>
+<summary>Text version (with middleware, tools, and per-node details)</summary>
+
 ```text
                         ┌──────────────────────┐
                         │   Customer request   │  Chat page (Streamlit) · REST API
@@ -250,6 +257,8 @@ flowchart TB
                         └──────────────────────┘
 ```
 
+</details>
+
 The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval uses LangGraph `interrupt()` with a checkpointer; `Command(resume=...)` continues the run after the decision. Every run is traced in **LangSmith** (`run_name="opspilot"`, metadata `request_id` + `prompt_versions`), and every decision is logged as a `key=value` event.
 
 ### Where things live
@@ -268,7 +277,7 @@ The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval u
 | `src/api/` | FastAPI endpoint: a thin adapter over `service.py` |
 | `data/` | Fictional sample data: 15 orders, 12 customers, 8 tickets, 10 subscriptions |
 | `specs/`, `plans/` | Specification and the phase-by-phase implementation plan |
-| `docs/` | `architecture.drawio` (system diagram), `demo-script.md` (Loom script), `business-overview.md` (Vietnamese) |
+| `docs/` | `architecture.drawio` (editable system diagram), `langgraph-flow.png` / `system-architecture.png` (rendered diagrams, `.mmd` sources alongside), `demo-script.md` (Loom script), `business-overview.md` (Vietnamese) |
 
 ## 4. Key Design Decisions
 

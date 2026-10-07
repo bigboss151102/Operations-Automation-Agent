@@ -1,0 +1,35 @@
+flowchart TD
+    start([START]) --> validate_input
+
+    validate_input["validate_input<br><i>code: length, ID extraction</i>"]
+    investigate["investigate<br><i>LLM: create_agent + read tools</i>"]
+    guardrails["guardrails<br><i>code: severity + R1–R8</i>"]
+    execute_actions["execute_actions<br><i>code: ticket, reply draft (R8)</i>"]
+    notify_operations["notify_operations<br><i>code: refund approvals + Slack report</i>"]
+    human_approval["human_approval<br><i>interrupt(): wait for Approve / Reject</i>"]
+    respond["respond<br><i>code: AnalyzeResponse</i>"]
+    finish([END])
+
+    validate_input -- "valid" --> investigate
+    validate_input -. "empty / too long → error" .-> respond
+
+    investigate -- "AgentProposal OK" --> guardrails
+    investigate -. "invalid output / call limit → error" .-> respond
+
+    guardrails -- "proceed" --> execute_actions
+    guardrails -. "needs_more_info (R5) · not_found (R6) · rejected (R7)" .-> respond
+
+    execute_actions --> notify_operations --> human_approval
+
+    human_approval -- "no refund pending: pass through" --> respond
+    human_approval -- "refund pending: PAUSE<br>state saved in checkpointer" --> paused{{"⏸ waiting for admin<br>Operation Admin page"}}
+    paused -- "resume_agent → Command(resume={decisions})<br>approve → issue_refund · Slack thread reply · message to customer" --> respond
+
+    respond --> finish
+
+    classDef llm fill:#e1d5e7,stroke:#9673a6
+    classDef code fill:#d5e8d4,stroke:#82b366
+    classDef hitl fill:#ffe6cc,stroke:#d79b00
+    class investigate llm
+    class validate_input,guardrails,execute_actions,notify_operations,respond code
+    class human_approval,paused hitl
