@@ -225,3 +225,7 @@ __marimo__/
 
 
 .claude/
+
+# Local-only working docs (not part of the source code)
+specs/
+docs/demo-script.md

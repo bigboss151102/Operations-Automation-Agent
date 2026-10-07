@@ -182,7 +182,7 @@ The workflow pauses after the Slack report and saves its state; the Approve clic
 - **Customer text is controlled.** Replies pass the R8 check. The notice after an approval decision uses a fixed template, not AI text, so amounts and references are exact.
 - **Prompts are versioned files**, and every run is traced in LangSmith with the prompt versions. Logs record message length and IDs, not the customer's text.
 
-**Decisions on points the spec left open**
+**Decisions on points the requirements left open**
 
 | ID | Decision |
 |---|---|
@@ -191,7 +191,7 @@ The workflow pauses after the Slack report and saves its state; the Approve clic
 | D3 | Severity comes from a fixed table; the highest matching level wins |
 | D4 | The agent writes the reply from an example template; R8 checks it |
 | D5 | When information is missing, the agent asks in its own words and continues with the earlier messages |
-| D6 | Client request: the chatbot shows the checked reply to the customer (changes spec Rule 3) |
+| D6 | Client request: the chatbot shows the checked reply to the customer (originally, replies were drafts only) |
 | D7 | Client request: real Slack reports that tag the team; simulated when Slack is not configured |
 | D8 | Approvals live on a separate Operation Admin page, never in the customer chat |
 | D9 | Slack is notified only when the guardrails allow it |
