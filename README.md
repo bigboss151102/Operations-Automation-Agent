@@ -165,6 +165,14 @@ flowchart TB
 
 Purple: the Investigate Agent, the only AI step. Green: plain code. Orange: human approval. Dashed lines are early exits when something is wrong or missing. Diagram source: [`docs/langgraph-flow.mmd`](docs/langgraph-flow.mmd).
 
+### Request flow (end to end)
+
+One refund request from the customer's message to the approval and the customer notice: who calls whom, in order.
+
+![OpsPilot request flow](docs/request-sequence.png)
+
+The workflow pauses after the Slack report and saves its state; the Approve click resumes it. While it waits, the chat checks the case every 3 seconds and shows the decision as soon as it is made. Diagram source: [`docs/request-sequence.mmd`](docs/request-sequence.mmd).
+
 ## 4. Key Design Decisions
 
 - **AI and rules are separate.** Only the Investigate Agent uses the AI. Severity, approvals, and duplicate checks are plain code with their own tests. The agent's output has no field for severity or approval, so it cannot make those decisions.

@@ -1,0 +1,59 @@
+sequenceDiagram
+    autonumber
+    actor Customer
+    participant Chat as Chat page
+    participant Service as Agent Service
+    participant WF as Agent Workflow<br>(LangGraph)
+    participant AI as Investigate Agent
+    participant OpenAI
+    participant Data as Operations data<br>+ action records
+    participant Slack
+    participant Store as Case store<br>+ paused workflows
+    participant Admin as Operation Admin
+    actor Manager as Ops manager
+
+    Customer->>Chat: "My order ORD-1007 is 15 days late. I want a refund."
+    Chat-->>Customer: shows the message + "Looking into it…"
+    Chat->>Service: run_agent(message)
+    Service->>WF: start (thread_id = request_id)
+
+    Note over WF: Input Check: not empty, not too long, IDs found
+    WF->>AI: Investigate
+    loop read-only investigation
+        AI->>OpenAI: reason about the request
+        AI->>Data: get_order · get_customer · get_support_tickets
+    end
+    AI-->>WF: AgentProposal (summary, evidence, actions, reply draft)
+
+    WF->>Data: Guardrails re-read the real data
+    Note over WF: Severity HIGH · ticket: automatic · refund: needs approval
+    Note over WF,Data: Early exit (invalid input, AI error, missing info, unknown order):<br>straight to Respond, no actions, no Slack
+
+    WF->>Data: Run Safe Actions: create ticket TCK-2010, save R8-checked draft
+    WF->>Data: Notify Operations: create approval APR-1001
+    WF->>Slack: case report (severity, evidence, pending refund), tags the team
+    WF->>Store: Human Approval: pause and save the workflow state
+    WF-->>Service: paused (awaiting approval)
+    Service->>Store: save the case
+    Service-->>Chat: reply draft
+    Chat-->>Customer: "Your refund request is being reviewed by our team"
+
+    loop every 3 seconds while the refund is pending
+        Chat->>Service: get_case
+    end
+
+    Manager->>Admin: open "Waiting for approval"
+    Admin->>Service: list_cases
+    Manager->>Admin: Approve
+    Admin->>Service: resume_agent(APR-1001: approve)
+    Service->>WF: resume
+    WF->>Store: load the paused state
+    WF->>Data: issue_refund → RFD-0001
+    WF->>Slack: thread reply "✅ Refund approved · RFD-0001"
+    Note over WF: Customer notice from a fixed template (not AI) · Respond
+    WF-->>Service: completed
+    Service->>Store: update the case
+
+    Chat->>Service: get_case (next poll)
+    Service-->>Chat: decision notice
+    Chat-->>Customer: "Good news: your refund of 249.99 USD was approved (RFD-0001)"
