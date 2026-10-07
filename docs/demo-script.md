@@ -1,6 +1,6 @@
-# Loom Demo Script (3–5 minutes)
+# Loom Demo Script (≈ 5 minutes)
 
-Goal (spec §30): in a few minutes the reviewer should see an agent that reasons about operational data, uses tools, recommends actions, runs safe actions, and **stops** when an action is risky or uncertain.
+The brief asks the video to show **how the demo works**, **why it is designed this way**, and **what would change for production**, and to show how a business problem becomes a **practical, testable AI system**.
 
 ## Before recording
 
@@ -8,38 +8,72 @@ Goal (spec §30): in a few minutes the reviewer should see an agent that reasons
 uv run python -m streamlit run src/web/app.py
 ```
 
-- Open **three windows** side by side:
-  1. the Streamlit **Chat** page (the customer);
-  2. the Streamlit **Operation Admin** page in a second tab (the operations team);
-  3. the Slack channel (`#operations-alerts`).
-- Keep LangSmith (`opspilot-demo`) open in another tab.
-- On Operation Admin, click **Reset demo data** so ticket and approval IDs start fresh.
-- Have `src/guardrails/rules.py` and the README architecture diagram open in the editor.
+- Restart Streamlit so the latest prompt is loaded.
+- Open side by side: the **Chat** page (the customer), the **Operation Admin** page in a second tab (the operations team), and the **Slack** channel.
+- On Operation Admin, click **Reset demo data** so IDs start fresh (TCK-2009, RFD-0001).
+- **Do a full dry run first** (LLM output varies between runs), then reset again.
+- Prepare so the recording never waits:
+  - send **1 · Delayed order** twice, so the **Tickets** tab already shows 🆕 TCK-2009 and the second ticket blocked as a duplicate;
+  - run `uv run pytest` in a terminal (237 passed);
+  - open `src/guardrails/rules.py` in the editor and one `opspilot` trace in LangSmith.
+- Do **not** click "New conversation" while a refund is pending: the chat would not receive the decision.
 
-## 1. Problem and architecture (≈ 30 s)
+## Timeline
 
-- "Support teams triage requests by hand. Letting an LLM act on its own is risky: it can invent orders, issue refunds, or promise things to customers."
-- Show the README diagram: "Only one step uses the LLM. It investigates with **read-only** tools and recommends. Deterministic guardrails decide what may run, every case is reported to the team in Slack, and refunds always wait for a human."
+| Time | Screen | Say | Do |
+|---|---|---|---|
+| **0:00–0:30** Problem | README, Problem Statement | "Support teams look up four or five systems per request. Letting an AI act alone is risky: it can invent data or issue refunds. OpsPilot automates the research but keeps money decisions with a person." | Scroll the README |
+| **0:30–1:40** Architecture | README diagrams | See **Architecture talk track** below | Point at the diagrams |
+| **1:40–1:55** Demo: chat | Chat | "It talks like a person, in the customer's language." | Type **"Bạn có thể giúp tôi những gì"** |
+| **1:55–3:05** Demo: main loop | Chat → Slack → Admin → Chat | "Refund request: the bot says it's *being reviewed*, never promised. The team gets a tagged report in Slack, severity HIGH. The manager approves… and the customer is told automatically, with the refund reference." | Click **2 · Refund request** → show Slack → Admin **Approve** → back to Chat, wait ~3 s |
+| **3:05–3:30** Demo: safety | Chat + Admin | "Unknown order: it says *not found*, invents nothing, posts nothing to Slack. Same request twice: the second ticket is blocked as a duplicate." | Click **4 · Unknown order**; show the **Tickets** tab and the blocked ticket prepared earlier |
+| **3:30–4:10** Testable | Editor + terminal + LangSmith | "Business rules are plain functions, not prompts, so they're testable. 237 tests run offline with a scripted fake model, with no OpenAI or Slack calls. Every run is traced in LangSmith with the prompt version." | `rules.py` → `uv run pytest` output → one trace |
+| **4:10–4:55** Production | README, Production Improvements | "For production: a durable store so paused approvals survive restarts, real ticketing and payments with idempotency keys, login and roles for approvers, and LangSmith evaluations on every prompt change." | Scroll the table |
 
-## 2. The customer chat → Slack → admin loop (≈ 2.5 min)
+## Architecture talk track (≈ 70 s)
 
-| Order | Do | Point out |
-|---|---|---|
-| 0 | Chat: **1 · Delayed order**, then send the same message again | First run: `create_support_ticket` ✅ automatic (ORD-1001's old ticket TCK-2004 is closed, so it does not count). Operation Admin → **Tickets** tab: 🆕 TCK-2009, priority medium. Second run: ticket ⛔ blocked by `duplicate_ticket` (TCK-2009, the ticket the agent just created) |
-| 1 | Chat: **2 · Refund request** | The bot replies like a person; the refund is "being reviewed", never promised. **Switch to Slack**: a tagged 🟠 HIGH report with evidence, guardrail decisions (`issue_refund` → ⏸️ human approval), the executed ticket, and the pending approval |
-| 2 | Operation Admin: open the case → **Approve** | The simulated refund `RFD-…` appears in Executed actions. **Switch to Slack**: "✅ Refund approved…" in the thread. **Switch to Chat**: within ~3 s the bot tells the customer the refund was approved, with the `RFD-…` reference |
-| 3 | Chat: **3 · Existing ticket** | Slack/Admin: `create_support_ticket` → ⛔ blocked (`duplicate_ticket`, TCK-2001); the report asks the team to follow up on the existing ticket |
-| 4 | Chat: **4 · Unknown order** | The bot says it can't find ORD-9999; no invented data; **nothing posted to Slack** |
-| 5 | Chat: **5 · Missing order ID** | The bot **asks** for the order ID in its own words; no tool ran, no Slack post. Reply "It's ORD-1007." → it continues with full context |
-| 6 | Chat: **6 · High-value refund** | Slack: 🔴 CRITICAL ($1,200), ticket/alert escalated to critical; the refund still waits in Admin |
+### 1. The big picture (≈ 15 s), System architecture diagram
 
-## 3. Under the hood (≈ 1 min)
+> "Here's the whole system. Customers use the **chat**, the operations team uses the **Operation Admin** page, and there's also a **REST API**. All three go through one **agent service**, so there is a single place where the logic lives. Underneath is a LangGraph **workflow**, read-only **tools** over the order data, and three external services: **OpenAI** for reasoning, **Slack** for team alerts, and **LangSmith** for tracing."
 
-- LangSmith: open the latest `opspilot` trace. Show the node tree (`validate_input → investigate → guardrails → execute_actions → notify_operations → human_approval`), the read tools inside `investigator`, the separate `guardrails.evaluate` span, and the `request_id` / `prompt_versions` metadata.
-- Editor: scroll `src/guardrails/rules.py`, showing plain functions with rule IDs (R1–R7), no LLM.
-- Mention the two guardrail layers: middleware blocks guessed IDs **during** the investigation; rules decide **after** it. The reply shown to the customer passes the R8 content policy.
+Point top to bottom: users → interfaces → agent service → workflow → tools and data → external services.
 
-## 4. Limitations and production path (≈ 30 s)
+### 2. One request through the workflow (≈ 35 s), Agent workflow image
 
-- "Data and actions are simulated except Slack; approvals and cases live in memory; there is no auth yet."
-- "For production: a durable checkpointer and approval queue, real ticketing/payment integrations with idempotency keys, RBAC on the admin page, an audit log, and LangSmith evals gating every prompt change." (See README §7.)
+> "Each request goes through seven steps.
+> **Input check** rejects empty or oversized messages.
+> The **Investigate Agent** is the *only* step that uses AI. It reads the order, customer, tickets, and subscription, and returns a structured proposal: what happened, the evidence, and recommended actions.
+> Then **guardrails**, plain code, decide for each action: run automatically, needs a human, or blocked.
+> Safe actions run: a ticket and a reply draft, and the **ops team is notified** in Slack.
+> If there's a refund, the workflow **pauses** here and waits for a manager; Approve or Reject resumes it.
+> Dashed lines are early exits: missing information, an unknown order, or invalid AI output stop the run *before* anything happens."
+
+Point at the purple box (AI), the green boxes (code), the orange box (human), then trace the dashed lines.
+
+### 3. Why it is designed this way (≈ 20 s)
+
+> "Three design choices.
+> **One: the AI recommends, code decides.** The agent's output has no field for severity or approval, so it *can't* make those decisions, and the rules are testable functions, not prompt instructions.
+> **Two: the AI can only read.** It never calls a tool that changes anything, and it can't look up an order ID the customer didn't write, so it can't invent data.
+> **Three: money always needs a person.** Every refund pauses for approval, whatever the amount. When in doubt, the system does less, not more."
+
+Speak slowly here: this is what Architecture (25%) and Guardrails (20%) are scored on. If the video runs long, shorten part 1 to one sentence ("all interfaces go through one service") and keep parts 2 and 3.
+
+## Likely follow-up questions
+
+| Question | Short answer |
+|---|---|
+| Why not one agent that does everything? | A free agent is hard to control and to test. Splitting AI reasoning from rule-based decisions makes each part testable and every decision explainable. |
+| Why LangGraph? | The steps are explicit in code and in traces, and it has built-in **pause and resume** (`interrupt()` + checkpointer), which human approval needs. |
+| What are the two guardrail layers? | Layer 1 runs **during** the investigation: no lookups of IDs the customer never wrote, and customer emails are hidden from the AI. Layer 2 runs **after** it: rules R1–R8 re-read the real data and decide. |
+| What if the AI is wrong? | Invalid output stops the run with no action. A reply that promises a refund is replaced by a safe one (R8). An invented ID blocks every action (R7). |
+| Can the customer get a wrong message? | The customer only sees replies that passed the content check. The approval-decision notice is a fixed template, not AI text, because it states a financial outcome. |
+| How do you test an AI system? | 237 offline tests with a scripted fake model: no OpenAI calls, no Slack posts. Real-model runs of the scenarios were checked manually. |
+
+## Tips
+
+- Use the sidebar scenario buttons for operational cases to avoid typos; type the small-talk message by hand.
+- Each AI reply takes about 5–10 seconds: keep talking ("it's now looking up the order, the customer, and past tickets…") or cut the wait when editing.
+- Leave Scenarios 3, 5, 6 and the Reject flow out of the video; the README covers them.
+- Reply drafts for orders are in English even when the customer writes Vietnamese, on purpose: the content check covers English. Mention it as an improvement if asked.
+- If the AI answers oddly, say so: "this is why the guardrails exist". Nothing unsafe can run.
