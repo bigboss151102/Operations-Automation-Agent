@@ -173,6 +173,14 @@ Created tickets were only visible as an ID in a case's Executed actions (and in 
 - Operation Admin is split into **Cases** and **Tickets** tabs; a "Tickets created" metric; the table shows ticket, status, priority, issue, order, customer, date, and summary, with created tickets marked 🆕, a status filter, and "Only created this session".
 - Tests: `list_tickets` ordering/count (`test_agent.py`), the tab and its filter (`test_web.py`).
 
+## Addendum: greetings and small talk
+
+"xin chào" used to end as `completed` with no reply, so the chat showed the fallback "our team is looking into your request", which was untrue.
+
+- Prompt `ops_agent_system` v4: a greeting, thanks, or small talk gets a short friendly `clarification_question` in the customer's language (no tools, no actions, `missing_fields: ["issue_description"]`).
+- Guardrail R5 safety net (`_missing_information`): intent `other` with no IDs and no actions → `needs_more_info`, using the LLM's reply or `NO_REQUEST_MESSAGE`.
+- Real `gpt-4.1-mini`: "xin chào", "hello", "cảm ơn…", "bạn là ai…" all got conversational replies; "xin chào" followed by an order message continued normally; S1 and S5 unchanged.
+
 ## Out of scope
 
 Slack interactive buttons (Socket Mode), a customer authentication flow, persisting cases across restarts.

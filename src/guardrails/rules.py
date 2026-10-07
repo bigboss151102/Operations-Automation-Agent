@@ -30,6 +30,10 @@ MISSING_ORDER_ID_MESSAGE = (
     "I can help investigate this, but I need the order ID before I can check the order "
     "or determine whether a refund is appropriate."
 )
+NO_REQUEST_MESSAGE = (
+    "Hi! How can I help you today? If your question is about an order, please share the order ID "
+    "(for example ORD-1234)."
+)
 MISSING_CUSTOMER_ID_MESSAGE = "I can help with your subscription, but I need your customer ID to look it up."
 UNVERIFIED_ID_MESSAGE = (
     "I couldn't verify the order or customer referenced in this analysis against your message, "
@@ -54,25 +58,33 @@ _PRIORITY = {
 # --- case-level stop rules (R7, R5, R6) ---------------------------------------------------
 
 
+def _missing_information(proposal: AgentProposal) -> str | None:
+    """R5: the question to ask when the case cannot be investigated yet, or None."""
+    # No request yet (a greeting or small talk): reply and ask how to help, rather than finishing as if the
+    # team were working on something.
+    if (
+        proposal.intent is Intent.OTHER
+        and proposal.order_id is None
+        and proposal.customer_id is None
+        and not proposal.proposed_actions
+    ):
+        return proposal.clarification_question or NO_REQUEST_MESSAGE
+    if proposal.missing_fields or (proposal.intent in ORDER_INTENTS and proposal.order_id is None):
+        return proposal.clarification_question or MISSING_ORDER_ID_MESSAGE
+    if proposal.intent is Intent.SUBSCRIPTION_ISSUE and proposal.customer_id is None and proposal.order_id is None:
+        return proposal.clarification_question or MISSING_CUSTOMER_ID_MESSAGE
+    return None
+
+
 def _stop(proposal: AgentProposal, facts: Facts) -> tuple[GuardrailOutcome, RuleId, str] | None:
     # R7 first: an ID the customer never wrote (and no tool returned) is a hallucination.
     for referenced in (proposal.order_id, proposal.customer_id):
         if referenced is not None and referenced not in facts.verified_ids:
             return GuardrailOutcome.REJECTED, RuleId.UNVERIFIED_ID, UNVERIFIED_ID_MESSAGE
 
-    # R5: required information is missing. Ask; never guess.
-    if proposal.missing_fields or (proposal.intent in ORDER_INTENTS and proposal.order_id is None):
-        return (
-            GuardrailOutcome.NEEDS_MORE_INFO,
-            RuleId.MISSING_INFORMATION,
-            (proposal.clarification_question or MISSING_ORDER_ID_MESSAGE),
-        )
-    if proposal.intent is Intent.SUBSCRIPTION_ISSUE and proposal.customer_id is None and proposal.order_id is None:
-        return (
-            GuardrailOutcome.NEEDS_MORE_INFO,
-            RuleId.MISSING_INFORMATION,
-            (proposal.clarification_question or MISSING_CUSTOMER_ID_MESSAGE),
-        )
+    # R5: ask, never guess.
+    if (question := _missing_information(proposal)) is not None:
+        return GuardrailOutcome.NEEDS_MORE_INFO, RuleId.MISSING_INFORMATION, question
 
     # R6: the referenced record does not exist. Never invent one.
     if proposal.order_id is not None and facts.order is None:

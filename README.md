@@ -71,7 +71,7 @@ OpsPilot works like a new team member who prepares the case file: it does the re
 | R2 High-value orders ($500+) | Severity becomes CRITICAL; the ticket and alert are marked critical |
 | R3 No direct customer messaging | The customer only sees the checked reply and the decision notice |
 | R4 No duplicate tickets | An open ticket for the same issue blocks a new one |
-| R5 Missing information | Without an order ID, the agent asks; nothing runs |
+| R5 Missing information | Without an order ID, the agent asks; nothing runs. A greeting or small talk gets a friendly reply in the customer's language |
 | R6 Order not found | OpsPilot says so; nothing runs |
 | R7 Unverified ID | The AI mentions an ID nobody wrote: treated as invented; nothing runs |
 | R8 Safe replies | A reply that promises a refund or compensation, or leaks internal details, is replaced by a safe message |

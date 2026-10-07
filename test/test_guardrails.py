@@ -29,7 +29,7 @@ from src.common.schemas import (
 )
 from src.config.settings import today
 from src.guardrails.draft_policy import check_customer_draft
-from src.guardrails.rules import MISSING_ORDER_ID_MESSAGE, evaluate
+from src.guardrails.rules import MISSING_ORDER_ID_MESSAGE, NO_REQUEST_MESSAGE, evaluate
 from src.guardrails.severity import classify_severity
 from src.repositories.data_store import get_data_store
 from src.repositories.tickets import find_tickets
@@ -251,6 +251,22 @@ def test_missing_information_uses_the_llm_question_with_fallback():
     assert evaluate(asked, Facts(), high_value_threshold=THRESHOLD).message == "Could you share your order ID?"
     silent = make_proposal(**no_ids)
     assert evaluate(silent, Facts(), high_value_threshold=THRESHOLD).message == MISSING_ORDER_ID_MESSAGE
+
+
+def test_greeting_asks_how_to_help_instead_of_finishing():
+    greeting = {
+        "intent": Intent.OTHER,
+        "issue_type": IssueType.OTHER,
+        "requested_action": RequestedAction.NONE,
+        "order_id": None,
+        "customer_id": None,
+    }
+    replied = make_proposal(**greeting, clarification_question="Xin chào! Mình có thể giúp gì cho bạn?")
+    result = evaluate(replied, Facts(verified_ids=frozenset()), high_value_threshold=THRESHOLD)
+    assert result.outcome is GuardrailOutcome.NEEDS_MORE_INFO
+    assert result.message == "Xin chào! Mình có thể giúp gì cho bạn?"  # the LLM's own words
+    silent = make_proposal(**greeting)  # the LLM forgot to reply: a friendly fallback, never "the team is on it"
+    assert evaluate(silent, Facts(), high_value_threshold=THRESHOLD).message == NO_REQUEST_MESSAGE
 
 
 def test_invented_id_outranks_missing_information():

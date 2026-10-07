@@ -251,6 +251,22 @@ def test_missing_order_id_asks_for_it():
     assert response.approvals == []
 
 
+def test_greeting_gets_a_conversational_reply():
+    greeting = _clarification(
+        intent="other",
+        issue_type="other",
+        requested_action="none",
+        issue_summary="The customer greeted us without describing an issue.",
+        missing_fields=["issue_description"],
+        clarification_question="Xin chào! Mình có thể giúp gì cho bạn hôm nay?",
+    )
+    response = run_agent("xin chào", graph=graph_for(greeting))
+    assert response.status is ResponseStatus.NEEDS_MORE_INFO
+    assert response.message == "Xin chào! Mình có thể giúp gì cho bạn hôm nay?"
+    assert response.executed_actions == []
+    assert response.notification is None  # nothing is reported to Slack for a greeting
+
+
 def test_missing_id_cannot_be_bypassed():
     # The model guesses an order (blocked by middleware), then proposes a refund anyway (blocked by guardrails).
     graph = graph_for(
