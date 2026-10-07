@@ -42,4 +42,4 @@ uv run python -m streamlit run src/web/app.py
 ## 4. Limitations and production path (≈ 30 s)
 
 - "Data and actions are simulated except Slack; approvals and cases live in memory; there is no auth yet."
-- "For production: a durable checkpointer and approval queue, real ticketing/payment integrations with idempotency keys, RBAC on the admin page, an audit log, and LangSmith evals gating every prompt change." (See README §8.)
+- "For production: a durable checkpointer and approval queue, real ticketing/payment integrations with idempotency keys, RBAC on the admin page, an audit log, and LangSmith evals gating every prompt change." (See README §7.)
