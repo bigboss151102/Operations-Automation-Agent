@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
+from src.agents.customer_updates import decision_message
 from src.agents.responder import build_response
 from src.agents.state import OpsState
 from src.common.schemas import (
@@ -352,13 +353,14 @@ class OpsNodes:
         actions = get_action_store()
         executed = list(state.get("executed_actions", []))
         decided: list[ApprovalRequest] = []
+        customer_updates = list(state.get("customer_updates", []))
         for approval in approvals:
             choice = self._decision_for(answer, approval.approval_id)
             status = ApprovalStatus.APPROVED if choice is ApprovalDecision.APPROVE else ApprovalStatus.REJECTED
             decided_approval = actions.decide_approval(approval.approval_id, status)
             decided.append(decided_approval)
             log_event("approval_decided", approval_id=approval.approval_id, decision=status, logger=_log)
-            refund_id: str | None = None
+            refund: ExecutedAction | None = None
             if status is ApprovalStatus.APPROVED and approval.action == ActionName.ISSUE_REFUND:
                 output = issue_refund.invoke(
                     {
@@ -369,9 +371,11 @@ class OpsNodes:
                 )
                 refund = _executed(approval.action, output, "refund_id")
                 executed.append(refund)
-                refund_id = refund.result_id
-            self._reply_in_thread(state, decision_reply_text(decided_approval, refund_id))
-        return {"approvals": decided, "executed_actions": executed}
+            self._reply_in_thread(state, decision_reply_text(decided_approval, refund.result_id if refund else None))
+            # The chatbot tells the customer the outcome (deterministic template, not LLM text).
+            customer = get_data_store().customer(str(approval.context.get("customer_id") or ""))
+            customer_updates.append(decision_message(decided_approval, refund, customer.name if customer else None))
+        return {"approvals": decided, "executed_actions": executed, "customer_updates": customer_updates}
 
     @staticmethod
     def _reply_in_thread(state: OpsState, text: str) -> None:

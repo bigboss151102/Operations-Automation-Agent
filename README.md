@@ -55,7 +55,7 @@ OpsPilot works like **a new team member preparing a case file for their manager*
 | 7. Reply to the customer | The chatbot answers: "Hi Alex, … your refund request is being reviewed by our team…". It never promises a refund. |
 | 8. Report to the team | The full analysis is posted to the operations Slack channel, tagging the people on duty |
 
-Only when a manager clicks **Approve** on the Operation Admin page does the system issue the (simulated) refund; the decision is also posted in the Slack thread. Clicking **Reject** changes nothing.
+Only when a manager clicks **Approve** on the Operation Admin page does the system issue the (simulated) refund; the decision is also posted in the Slack thread, and the chatbot tells the customer the outcome (with the refund reference). Clicking **Reject** issues no refund; the customer is told a team member will follow up.
 
 ### Business rules
 
@@ -184,7 +184,7 @@ Business rules are deliberately **not** middleware: the LLM never calls action t
 
 **Tools never fabricate data.** Tools return structured results (`{"success": false, "error": "ORDER_NOT_FOUND", ...}`), and the prompt forbids stating facts that are not in tool results. Delays are computed from the data (`days_late`), not from the customer's claim.
 
-**Customer-facing text is constrained.** The only text a customer sees is the reply draft after the deterministic R8 policy (no refund/compensation promises, no internal details); a violating draft is replaced by a safe fallback. There is no other customer-messaging capability (D6 changed the original "draft only, never shown" behaviour at the client's request).
+**Customer-facing text is constrained.** The only text a customer sees is the reply draft after the deterministic R8 policy (no refund/compensation promises, no internal details); a violating draft is replaced by a safe fallback. The only other customer message is the fixed-template decision notice after a human approves or rejects a refund (D10). There is no other customer-messaging capability (D6 changed the original "draft only, never shown" behaviour at the client's request).
 
 ### Decisions on points the spec left open
 
@@ -199,6 +199,7 @@ Business rules are deliberately **not** middleware: the LLM never calls action t
 | D7 | **Real Slack notifications** (client request): the full case report is posted to a Slack channel and tags the configured people. It is optional: without configuration it is simulated, so tests and fresh clones never need Slack. |
 | D8 | **Operation Admin page**: approvals moved off the customer UI. Admins see every case and approve/reject refunds there; each decision is replied in the report's Slack thread. |
 | D9 | Slack is notified only when guardrails allow `send_operations_notification` (stop rules such as missing information or not found send nothing). |
+| D10 | **The customer is told the decision** (client request): after an admin approves or rejects a refund, the chat posts the outcome. The message is a deterministic template (`src/agents/customer_updates.py`), not LLM text, because it states a financial outcome: exact amount and refund reference, and it never claims a refund was processed unless `issue_refund` succeeded. The Chat page polls the case every 3 seconds while a refund is pending. |
 
 Also: the spec suggests logging `user_input`. OpsPilot logs the message **length** and the IDs instead of the raw text, to keep customer text and PII out of application logs. The full text is visible in LangSmith when debugging.
 

@@ -26,7 +26,7 @@ uv run python -m streamlit run src/web/app.py
 | Order | Do | Point out |
 |---|---|---|
 | 1 | Chat: **2 · Refund request** | The bot replies like a person; the refund is "being reviewed", never promised. **Switch to Slack**: a tagged 🟠 HIGH report with evidence, guardrail decisions (`issue_refund` → ⏸️ human approval), the executed ticket, and the pending approval |
-| 2 | Operation Admin: open the case → **Approve** | The simulated refund `RFD-…` appears in Executed actions. **Switch to Slack**: "✅ Refund approved…" in the thread |
+| 2 | Operation Admin: open the case → **Approve** | The simulated refund `RFD-…` appears in Executed actions. **Switch to Slack**: "✅ Refund approved…" in the thread. **Switch to Chat**: within ~3 s the bot tells the customer the refund was approved, with the `RFD-…` reference |
 | 3 | Chat: **3 · Existing ticket** | Slack/Admin: `create_support_ticket` → ⛔ blocked (`duplicate_ticket`, TCK-2001); the report asks the team to follow up on the existing ticket |
 | 4 | Chat: **4 · Unknown order** | The bot says it can't find ORD-9999; no invented data; **nothing posted to Slack** |
 | 5 | Chat: **5 · Missing order ID** | The bot **asks** for the order ID in its own words; no tool ran, no Slack post. Reply "It's ORD-1007." → it continues with full context |

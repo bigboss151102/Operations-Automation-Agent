@@ -155,6 +155,16 @@ All offline: tests run with Slack unconfigured, or with a fake notifier injected
   - One S3 run returned a non-compliant draft that R8 replaced with the fallback; 3/3 re-runs were compliant (LLM nondeterminism, caught by design).
 - Tests: 226 offline (report rendering, notifier with a fake WebClient, post-once across resume, thread replies, Slack failure tolerance, no post on stop rules, case store, Chat + Admin AppTest flows).
 
+## Addendum: decision notice to the customer (D10)
+
+Client feedback: "after the admin approves, the chatbot must message the user".
+
+- `src/agents/customer_updates.py`: `decision_message(approval, refund, customer_name)`, a deterministic template (approved + refund reference, approved but refund failed, rejected).
+- `human_approval` appends it to `state["customer_updates"]`; `AnalyzeResponse.customer_updates` carries it, and the case store keeps it.
+- `service.get_case(request_id)`; the Chat page remembers its pending `request_id`s (`chat_waiting`) and polls them with `st.fragment(run_every=3)`; each message is posted once.
+- Operation Admin shows "Message sent to the customer after the decision".
+- Tests: template wording (`test_customer_updates.py`), approve/reject through the graph (`test_agent.py`), chat polling posts once + admin display (`test_web.py`).
+
 ## Out of scope
 
 Slack interactive buttons (Socket Mode), a customer authentication flow, persisting cases across restarts.

@@ -50,6 +50,18 @@ def as_markdown(text: str) -> str:
     return text.replace("$", "\\$")
 
 
+def _render_notification(response: AnalyzeResponse) -> None:
+    note = response.notification
+    if note is None:
+        return
+    if note.delivered:
+        st.caption(f"📣 Reported to Slack (channel `{note.channel}`)")
+    elif note.simulated:
+        st.caption("📣 Slack not configured: report logged as a simulated message")
+    else:
+        st.caption(f"⚠️ Slack report failed: {note.error}")
+
+
 def render_report(response: AnalyzeResponse, *, on_decide: Callable[[str, str, str], None] | None = None) -> None:
     """The full case analysis (for operations). ``on_decide`` adds Approve/Reject buttons to pending refunds."""
     _STATUS_BADGE[response.status](
@@ -102,16 +114,12 @@ def render_report(response: AnalyzeResponse, *, on_decide: Callable[[str, str, s
             width="stretch",
         )
 
-    if response.notification is not None:
-        note = response.notification
-        if note.delivered:
-            st.caption(f"📣 Reported to Slack (channel `{note.channel}`)")
-        elif note.simulated:
-            st.caption("📣 Slack not configured: report logged as a simulated message")
-        else:
-            st.caption(f"⚠️ Slack report failed: {note.error}")
-
+    _render_notification(response)
     _render_approvals(response, on_decide)
+    if response.customer_updates:
+        st.markdown("**Message sent to the customer after the decision**")
+        for update in response.customer_updates:
+            st.info(as_markdown(update))
 
     if response.customer_response:
         st.markdown("**Customer response** (shown to the customer in the chat)")

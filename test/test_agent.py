@@ -436,3 +436,23 @@ def test_reset_demo_data_clears_cases_and_actions():
     reset_demo_data()
     assert list_cases() == []
     assert get_action_store().tickets == []
+
+
+def test_customer_is_told_the_refund_was_approved():
+    graph = refund_graph()
+    paused = run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=graph)
+    assert paused.customer_updates == []  # nothing to tell the customer before a decision
+    done = resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "approve"}, graph=graph)
+    (update,) = done.customer_updates
+    assert update.startswith("Hi Alex, good news")
+    assert "249.99 USD" in update
+    assert "RFD-0001" in update
+    assert list_cases()[0].response.customer_updates == [update]  # the chat page reads it from the case store
+
+
+def test_customer_is_told_the_refund_was_rejected():
+    graph = refund_graph()
+    paused = run_agent("My order ORD-1007 is 15 days late. I want a refund.", graph=graph)
+    done = resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "reject"}, graph=graph)
+    (update,) = done.customer_updates
+    assert "not able to approve" in update

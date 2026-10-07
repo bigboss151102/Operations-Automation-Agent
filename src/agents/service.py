@@ -3,7 +3,8 @@
 - ``run_agent(message, history)`` starts a request. It returns ``status="awaiting_approval"`` when a
   refund is waiting for a human decision.
 - ``resume_agent(thread_id, decisions)`` records those decisions and finishes the run.
-- ``list_cases`` / ``pending_cases`` / ``reset_demo_data`` serve the Operation Admin page.
+- ``list_cases`` / ``pending_cases`` / ``reset_demo_data`` serve the Operation Admin page; ``get_case`` lets
+  the chat page pick up refund decisions for its customer.
 
 Every result is saved in the case store, so the admin page sees cases created from the chat.
 
@@ -126,6 +127,11 @@ def resume_agent(
 def list_cases() -> list[CaseRecord]:
     """All cases, most recently updated first."""
     return get_case_store().all()
+
+
+def get_case(request_id: str) -> CaseRecord | None:
+    """One case by request ID (the chat page polls it for refund decisions)."""
+    return get_case_store().get(request_id)
 
 
 def pending_cases() -> list[CaseRecord]:

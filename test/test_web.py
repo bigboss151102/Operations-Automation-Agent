@@ -99,6 +99,9 @@ def fake_service(monkeypatch) -> dict[str, Any]:
     monkeypatch.setattr(service, "run_agent", fake_run)
     monkeypatch.setattr(service, "resume_agent", fake_resume)
     monkeypatch.setattr(service, "list_cases", lambda: state["cases"])
+    monkeypatch.setattr(
+        service, "get_case", lambda request_id: next((c for c in state["cases"] if c.request_id == request_id), None)
+    )
     monkeypatch.setattr(service, "reset_demo_data", fake_reset)
     monkeypatch.setattr(service, "get_graph", object)  # no real graph is built
     return state
@@ -208,3 +211,30 @@ def test_admin_reset_demo_data(fake_service):
     at.button(key="reset_demo").click().run()
     assert fake_service["resets"] == 1
     assert "No cases yet" in at.info[0].value
+
+
+def test_chat_posts_the_refund_decision_once_it_is_made(fake_service):
+    fake_service["replies"].append(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))
+    fake_service["cases"] = [_case(_refund_response(ResponseStatus.AWAITING_APPROVAL, ApprovalStatus.PENDING))]
+    at = _app()
+    at.chat_input(key="chat_input").set_value(REFUND_TEXT).run()  # run_agent saves the case before returning
+    at.run()
+    assert len(at.chat_message) == 3  # greeting, customer, draft: no decision yet
+
+    decided = _refund_response(ResponseStatus.COMPLETED, ApprovalStatus.APPROVED).model_copy(
+        update={"customer_updates": ["Hi Alex, good news: our team has approved your refund of 249.99 USD."]}
+    )
+    fake_service["cases"] = [_case(decided)]
+    at.run()  # what the 3-second poll does
+    assert _chat_texts(at)[-1].startswith("Hi Alex, good news")
+    at.run()
+    assert len(at.chat_message) == 4  # posted exactly once
+
+
+def test_admin_shows_the_message_sent_to_the_customer(fake_service):
+    decided = _refund_response(ResponseStatus.COMPLETED, ApprovalStatus.APPROVED).model_copy(
+        update={"customer_updates": ["Hi Alex, good news: our team has approved your refund of 249.99 USD."]}
+    )
+    at = _admin(fake_service, _case(decided))
+    at.expander[0]  # recent case
+    assert any("good news" in info.value for info in at.info)

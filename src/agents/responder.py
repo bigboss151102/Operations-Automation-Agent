@@ -73,4 +73,5 @@ def build_response(state: Mapping[str, Any]) -> AnalyzeResponse:
         customer_response=state.get("customer_response"),
         draft_policy_violations=list(state.get("draft_violations", [])),
         notification=state.get("notification"),
+        customer_updates=list(state.get("customer_updates", [])),
     )

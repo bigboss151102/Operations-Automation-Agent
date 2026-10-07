@@ -47,7 +47,7 @@ OpsPilot làm việc như **một nhân viên mới chuẩn bị hồ sơ cho s�
 | 7. Trả lời khách | Chatbot trả lời: "Hi Alex, … your refund request is being reviewed by our team…" (không bao giờ hứa hoàn tiền) |
 | 8. Báo cáo cho đội | Toàn bộ phân tích được gửi vào channel Slack của đội vận hành, tag người phụ trách |
 
-Quản lý bấm **Approve** trên trang **Operation Admin** thì hệ thống mới thực hiện refund (ở dạng giả lập), và kết quả được trả lời ngay trong thread Slack. Bấm **Reject** thì không có gì xảy ra.
+Quản lý bấm **Approve** trên trang **Operation Admin** thì hệ thống mới thực hiện refund (ở dạng giả lập), kết quả được trả lời ngay trong thread Slack, và chatbot nhắn lại cho khách (kèm mã refund). Bấm **Reject** thì không hoàn tiền; chatbot báo khách là nhân viên sẽ liên hệ lại. Tin nhắn này dùng mẫu cố định, không do AI viết, vì nó nói về tiền.
 
 ## Luật nghiệp vụ (đã chốt)
 

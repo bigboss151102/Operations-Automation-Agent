@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `specs/specification.md` is the source of truth for requirements, architecture, and scope. If a skill or habit conflicts with it, the spec wins. Demo scenarios (spec §16) are tied to the sample data in `data/` and `REFERENCE_DATE=2026-10-10`. Changing either can break scenarios and `test/test_data.py`.
 
-Status: all 9 phases done. Phase 9 added the customer Chat page, the Operation Admin page, and real Slack notifications (optional; simulated when `SLACK_*` is unset). The README covers spec §25, and the Loom script is in `docs/demo-script.md`. The build history and per-phase notes are in `plans/`.
+Status: all 9 phases done. Phase 9 added the customer Chat page, the Operation Admin page, and real Slack notifications (optional; simulated when `SLACK_*` is unset). After an admin decides a refund, the chat tells the customer the outcome via a fixed template (`src/agents/customer_updates.py`, D10; the Chat page polls the case store every 3 s). The README covers spec §25, and the Loom script is in `docs/demo-script.md`. The build history and per-phase notes are in `plans/`.
 
 ## Stack
 

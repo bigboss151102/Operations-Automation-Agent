@@ -27,5 +27,6 @@ class OpsState(TypedDict, total=False):
     pending_approvals: list[ApprovalRequest]  # created by notify_operations; the graph pauses on them
     notification: NotificationResult | None  # the ops report delivery (Slack or simulated): thread for follow-ups
     approvals: list[ApprovalRequest]  # decided approvals (human_approval)
+    customer_updates: list[str]  # follow-up messages for the customer after a decision (human_approval)
     error: str | None  # invalid_input | invalid_llm_output
     response: AnalyzeResponse  # final output (respond)

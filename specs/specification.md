@@ -966,6 +966,8 @@ Keep the UI extremely simple.
 
 Cases are kept in an in-memory case store shared by all sessions, so an admin tab sees conversations from any chat tab. The operations team is notified in Slack (Tool 6), tagged, and sees each refund decision as a thread reply.
 
+**Decision notice to the customer (D10).** After an admin approves or rejects a refund, `human_approval` builds a deterministic customer message (`src/agents/customer_updates.py`): the approved amount and refund reference, a "problem processing it" notice if `issue_refund` failed, or a polite rejection. It is returned in `AnalyzeResponse.customer_updates` and saved with the case. While a refund is pending, the Chat page polls the case every 3 seconds (`st.fragment(run_every=3)`) and posts the message once it arrives. The text is a template, not LLM output, because it states a financial outcome.
+
 Implementation notes:
 
 * Streamlit calls the agent **in-process** through the same service function used by the API (e.g. `run_agent(message)` / `resume_agent(thread_id, decision)`). It does not call the agent over HTTP.

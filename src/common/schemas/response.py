@@ -41,3 +41,6 @@ class AnalyzeResponse(Record):
     )
     draft_policy_violations: list[PolicyViolation] = Field(default_factory=list)  # R8: LLM draft was replaced
     notification: NotificationResult | None = None  # operations alert (Slack or simulated), if one was sent
+    customer_updates: list[str] = Field(
+        default_factory=list, description="Follow-up messages for the customer after a refund decision."
+    )
