@@ -221,8 +221,24 @@ curl -X POST localhost:8000/api/v1/agent/analyze -H 'Content-Type: application/j
 - The customer sees AI-written replies. R8 blocks promises, but the wording can vary between runs.
 - Slack reports and LangSmith traces contain customer names and messages (acceptable only because the data is fictional).
 - There is no automated AI evaluation suite, and duplicate detection depends on the agent classifying the issue type consistently.
+- No long-term memory: the chat only re-sends earlier messages while a question is open, and nothing is remembered across conversations.
+- No knowledge base: general questions (shipping times, refund policy) are not answered, only order and subscription cases.
+- Token usage and cost are visible in LangSmith traces but not tracked, budgeted, or alerted on.
 
 ## 7. Production Improvements
+
+**AI agent**
+
+| Area | Change |
+|---|---|
+| Memory | Short-term: keep each conversation's state per customer session in a durable checkpointer, and summarize long chats so the context stays small. Long-term: a per-customer memory store (past issues, preferred language) that the agent can read, with retention limits for privacy |
+| Common questions | Answer frequent policy questions (shipping times, refund and return policy, how subscriptions bill) from a help-center knowledge base with retrieval (RAG) and cited sources, and cache answers to the most frequent questions. Route small talk and FAQs past the full investigation |
+| Cost & tracing | Track tokens and cost per request, per step, and per customer in LangSmith; set budgets and alerts. Use a smaller model for small talk and routing, keep the system prompt static so provider prompt caching applies, and keep the call limits |
+| Quality | LangSmith evaluation datasets (including real, anonymized cases) run on every prompt or model change; the team's edits to reply drafts feed back into the dataset |
+| Multilingual | Reply drafts in the customer's language, with the R8 content check extended to each supported language |
+| Human handoff | Hand the conversation to a live agent on request, after repeated failures, or for angry customers |
+
+**Platform**
 
 | Area | Change |
 |---|---|
@@ -231,8 +247,7 @@ curl -X POST localhost:8000/api/v1/agent/analyze -H 'Content-Type: application/j
 | Security | Login and roles (who may approve which refunds), secrets in a secret manager |
 | Approvals | An approval queue with assignees, SLAs, an audit trail, and an API |
 | Reliability | Retries, timeouts, rate limits, and a fallback model |
-| Quality | LangSmith evaluation datasets run on every prompt or model change |
-| Observability | Metrics and alerts (approval time, block rate, AI errors), and PII redaction in logs and traces |
+| Observability | Metrics and alerts (approval time, block rate, AI errors, cost), and PII redaction in logs and traces |
 
 ---
 

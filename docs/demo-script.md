@@ -28,7 +28,7 @@ uv run python -m streamlit run src/web/app.py
 | **1:55–3:05** Demo: main loop | Chat → Slack → Admin → Chat | "Refund request: the bot says it's *being reviewed*, never promised. The team gets a tagged report in Slack, severity HIGH. The manager approves… and the customer is told automatically, with the refund reference." | Click **2 · Refund request** → show Slack → Admin **Approve** → back to Chat, wait ~3 s |
 | **3:05–3:30** Demo: safety | Chat + Admin | "Unknown order: it says *not found*, invents nothing, posts nothing to Slack. Same request twice: the second ticket is blocked as a duplicate." | Click **4 · Unknown order**; show the **Tickets** tab and the blocked ticket prepared earlier |
 | **3:30–4:10** Testable | Editor + terminal + LangSmith | "Business rules are plain functions, not prompts, so they're testable. 237 tests run offline with a scripted fake model, with no OpenAI or Slack calls. Every run is traced in LangSmith with the prompt version." | `rules.py` → `uv run pytest` output → one trace |
-| **4:10–4:55** Production | README, Production Improvements | "For production: a durable store so paused approvals survive restarts, real ticketing and payments with idempotency keys, login and roles for approvers, and LangSmith evaluations on every prompt change." | Scroll the table |
+| **4:10–5:00** Production | README, Production Improvements (AI agent, then Platform) | "For production, on the AI side: **memory** per customer so conversations carry over, a **knowledge base** to answer common policy questions with sources, **cost tracking** per request with budgets and a smaller model for small talk, and evaluations on every prompt change. On the platform side: durable storage so paused approvals survive restarts, real ticketing and payments, and login and roles for approvers." | Scroll the table |
 
 ## Architecture talk track (≈ 70 s)
 
@@ -68,6 +68,9 @@ Speak slowly here: this is what Architecture (25%) and Guardrails (20%) are scor
 | What are the two guardrail layers? | Layer 1 runs **during** the investigation: no lookups of IDs the customer never wrote, and customer emails are hidden from the AI. Layer 2 runs **after** it: rules R1–R8 re-read the real data and decide. |
 | What if the AI is wrong? | Invalid output stops the run with no action. A reply that promises a refund is replaced by a safe one (R8). An invented ID blocks every action (R7). |
 | Can the customer get a wrong message? | The customer only sees replies that passed the content check. The approval-decision notice is a fixed template, not AI text, because it states a financial outcome. |
+| How would you handle memory? | Today the chat re-sends earlier messages only while a question is open. In production: per-session state in a durable checkpointer with summarization, plus a long-term per-customer store (past issues, language) with retention limits. |
+| How would you control cost? | Track tokens and cost per request and step in LangSmith with budgets and alerts; a smaller model for small talk and routing; a static system prompt so provider prompt caching applies; call limits already cap each run. |
+| What about common questions like the refund policy? | A help-center knowledge base answered with retrieval and cited sources, cached for the most frequent questions, routed past the full investigation. |
 | How do you test an AI system? | 237 offline tests with a scripted fake model: no OpenAI calls, no Slack posts. Real-model runs of the scenarios were checked manually. |
 
 ## Tips
