@@ -148,7 +148,7 @@ The outer pipeline is an explicit LangGraph `StateGraph`. Pausing for approval u
 | `src/common/schemas/` | Pydantic models and enums shared across layers (`AgentProposal`, `GuardrailDecision`, `AnalyzeResponse`, …) |
 | `src/repositories/` | Read-only JSON data store + in-memory action store (tickets, approvals, refunds) + case store (admin page) |
 | `src/memory/` | LangGraph checkpointer (agent memory for pause/resume) |
-| `src/web/` | Streamlit app: **Chat** page (customers) and **Operation Admin** page (cases + refund approvals) |
+| `src/web/` | Streamlit app: **Chat** page (customers) and **Operation Admin** page (cases + refund approvals, and a **Tickets** tab listing sample tickets plus the simulated tickets created in this session) |
 | `src/integrations/` | Slack notifier (`chat.postMessage`, thread replies) and Block Kit report rendering |
 | `src/api/` | FastAPI endpoint: a thin adapter over `service.py` |
 | `data/` | Fictional sample data: 15 orders, 12 customers, 8 tickets, 10 subscriptions |
@@ -240,7 +240,7 @@ Quality checks: `uv run ruff format --check . && uv run ruff check . && uv run m
 
 ## 6. Demo Examples
 
-Use the scenario buttons on the **Chat** page, then open **Operation Admin** to review cases and decide refunds. With Slack configured, each report appears in the channel with the configured people tagged. "Today" is fixed at 2026-10-10.
+Use the scenario buttons on the **Chat** page, then open **Operation Admin** to review cases and decide refunds. The **Tickets** tab shows every ticket; the ones the agent created in this session are marked 🆕. Sending Scenario 1 twice shows duplicate detection on a ticket the agent itself just created. With Slack configured, each report appears in the channel with the configured people tagged. "Today" is fixed at 2026-10-10.
 
 | # | Input | Expected outcome |
 |---|---|---|

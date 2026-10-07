@@ -25,6 +25,7 @@ uv run python -m streamlit run src/web/app.py
 
 | Order | Do | Point out |
 |---|---|---|
+| 0 | Chat: **1 · Delayed order**, then send the same message again | First run: `create_support_ticket` ✅ automatic (ORD-1001's old ticket TCK-2004 is closed, so it does not count). Operation Admin → **Tickets** tab: 🆕 TCK-2009, priority medium. Second run: ticket ⛔ blocked by `duplicate_ticket` (TCK-2009, the ticket the agent just created) |
 | 1 | Chat: **2 · Refund request** | The bot replies like a person; the refund is "being reviewed", never promised. **Switch to Slack**: a tagged 🟠 HIGH report with evidence, guardrail decisions (`issue_refund` → ⏸️ human approval), the executed ticket, and the pending approval |
 | 2 | Operation Admin: open the case → **Approve** | The simulated refund `RFD-…` appears in Executed actions. **Switch to Slack**: "✅ Refund approved…" in the thread. **Switch to Chat**: within ~3 s the bot tells the customer the refund was approved, with the `RFD-…` reference |
 | 3 | Chat: **3 · Existing ticket** | Slack/Admin: `create_support_ticket` → ⛔ blocked (`duplicate_ticket`, TCK-2001); the report asks the team to follow up on the existing ticket |

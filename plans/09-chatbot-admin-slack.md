@@ -165,6 +165,14 @@ Client feedback: "after the admin approves, the chatbot must message the user".
 - Operation Admin shows "Message sent to the customer after the decision".
 - Tests: template wording (`test_customer_updates.py`), approve/reject through the graph (`test_agent.py`), chat polling posts once + admin display (`test_web.py`).
 
+## Addendum: Tickets tab on Operation Admin
+
+Created tickets were only visible as an ID in a case's Executed actions (and in Slack / LangSmith).
+
+- `service.list_tickets()` (sample + created, newest first) and `service.created_ticket_ids()`.
+- Operation Admin is split into **Cases** and **Tickets** tabs; a "Tickets created" metric; the table shows ticket, status, priority, issue, order, customer, date, and summary, with created tickets marked 🆕, a status filter, and "Only created this session".
+- Tests: `list_tickets` ordering/count (`test_agent.py`), the tab and its filter (`test_web.py`).
+
 ## Out of scope
 
 Slack interactive buttons (Socket Mode), a customer authentication flow, persisting cases across restarts.

@@ -9,11 +9,20 @@ from fakes import FakeNotifier, fake_model, tool_call
 from langchain_core.messages import AIMessage
 
 from src.agents.graph import build_graph
-from src.agents.service import list_cases, pending_cases, reset_demo_data, resume_agent, run_agent
+from src.agents.service import (
+    created_ticket_ids,
+    list_cases,
+    list_tickets,
+    pending_cases,
+    reset_demo_data,
+    resume_agent,
+    run_agent,
+)
 from src.common.schemas import ApprovalStatus, Execution, ResponseStatus, RuleId, Severity
 from src.integrations.slack import set_notifier
 from src.memory.checkpointer import make_checkpointer
 from src.repositories.action_store import get_action_store
+from src.tools.tickets import create_support_ticket
 from src.utils.logging import get_logger, make_handler
 
 COMPLIANT_DRAFT = (
@@ -456,3 +465,19 @@ def test_customer_is_told_the_refund_was_rejected():
     done = resume_agent(paused.thread_id, {paused.approvals[0].approval_id: "reject"}, graph=graph)
     (update,) = done.customer_updates
     assert "not able to approve" in update
+
+
+def test_list_tickets_includes_created_tickets_newest_first():
+    create_support_ticket.invoke(
+        {
+            "customer_id": "CUS-101",
+            "order_id": "ORD-1001",
+            "issue_type": "delivery_delay",
+            "priority": "medium",
+            "summary": "late",
+        }
+    )
+    tickets = list_tickets()
+    assert tickets[0].ticket_id == "TCK-2009"
+    assert len(tickets) == 9  # 8 sample tickets + 1 created
+    assert created_ticket_ids() == {"TCK-2009"}

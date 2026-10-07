@@ -962,7 +962,7 @@ Keep the UI extremely simple.
 **Updated in Phase 9 (decisions D6, D8).** The Streamlit app (`src/web/app.py`) has two pages:
 
 * **Chat** (`src/web/views/chat.py`, customers): a chatbot. The customer describes the issue; the bot replies conversationally with the clarification question (missing information), the not-found / error message, or the R8-checked reply draft. Customers never see severity, rules, or approval buttons. While a clarification is open, the reply is sent with the earlier messages as `history`.
-* **Operation Admin** (`src/web/views/admin.py`, operations): every case (pending approvals first) with the full analysis (severity, evidence, guardrail decisions, executed actions, Slack delivery, reply draft) and **Approve / Reject** buttons that resume the paused LangGraph run.
+* **Operation Admin** (`src/web/views/admin.py`, operations): every case (pending approvals first) with the full analysis (severity, evidence, guardrail decisions, executed actions, Slack delivery, reply draft) and **Approve / Reject** buttons that resume the paused LangGraph run. A **Tickets** tab lists the sample tickets plus the simulated tickets created in this session (marked 🆕, filterable by status), so the created tickets can be inspected; duplicate detection (Rule 4) considers both.
 
 Cases are kept in an in-memory case store shared by all sessions, so an admin tab sees conversations from any chat tab. The operations team is notified in Slack (Tool 6), tagged, and sees each refund decision as a thread reply.
 

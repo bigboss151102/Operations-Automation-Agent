@@ -3,8 +3,8 @@
 - ``run_agent(message, history)`` starts a request. It returns ``status="awaiting_approval"`` when a
   refund is waiting for a human decision.
 - ``resume_agent(thread_id, decisions)`` records those decisions and finishes the run.
-- ``list_cases`` / ``pending_cases`` / ``reset_demo_data`` serve the Operation Admin page; ``get_case`` lets
-  the chat page pick up refund decisions for its customer.
+- ``list_cases`` / ``pending_cases`` / ``list_tickets`` / ``reset_demo_data`` serve the Operation Admin page;
+  ``get_case`` lets the chat page pick up refund decisions for its customer.
 
 Every result is saved in the case store, so the admin page sees cases created from the chat.
 
@@ -25,12 +25,13 @@ from langgraph.types import Command
 from src.agents.graph import build_graph
 from src.agents.investigator import PROMPT_VERSIONS
 from src.agents.responder import build_response, error_response
-from src.common.schemas import AnalyzeResponse, CaseRecord
+from src.common.schemas import AnalyzeResponse, CaseRecord, SupportTicket
 from src.config.settings import get_settings
 from src.llm.client import get_chat_model
 from src.memory.checkpointer import get_checkpointer
 from src.repositories.action_store import get_action_store
 from src.repositories.case_store import get_case_store
+from src.repositories.tickets import find_tickets
 from src.utils.logging import get_logger, log_event, set_request_id
 
 RECURSION_LIMIT = 25
@@ -137,6 +138,16 @@ def get_case(request_id: str) -> CaseRecord | None:
 def pending_cases() -> list[CaseRecord]:
     """Cases with a refund waiting for a human decision."""
     return [case for case in get_case_store().all() if case.response.approval_required]
+
+
+def list_tickets() -> list[SupportTicket]:
+    """Sample tickets plus tickets created in this session, newest first."""
+    return sorted(find_tickets(), key=lambda t: (t.created_at, t.ticket_id), reverse=True)
+
+
+def created_ticket_ids() -> set[str]:
+    """IDs of tickets the agent created in this session (simulated; gone after a reset or restart)."""
+    return {t.ticket_id for t in get_action_store().tickets}
 
 
 def reset_demo_data() -> None:

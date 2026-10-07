@@ -21,6 +21,7 @@ from src.common.schemas import (
     RuleId,
     Severity,
 )
+from src.tools.tickets import create_support_ticket
 
 APP = str(Path(__file__).resolve().parents[1] / "src" / "web" / "app.py")
 REFUND_TEXT = "My order ORD-1007 is 15 days late. I want a refund."
@@ -238,3 +239,22 @@ def test_admin_shows_the_message_sent_to_the_customer(fake_service):
     at = _admin(fake_service, _case(decided))
     at.expander[0]  # recent case
     assert any("good news" in info.value for info in at.info)
+
+
+def test_admin_tickets_tab_lists_sample_and_created_tickets(fake_service):
+    create_support_ticket.invoke(
+        {
+            "customer_id": "CUS-101",
+            "order_id": "ORD-1001",
+            "issue_type": "delivery_delay",
+            "priority": "medium",
+            "summary": "Order ORD-1001 is 2 days late.",
+        }
+    )
+    at = _admin(fake_service)
+    assert at.metric[2].value == "1"  # tickets created this session
+    table = at.dataframe[0].value
+    assert "🆕 TCK-2009" in set(table["ticket"])  # created ticket, marked as new
+    assert "TCK-2001" in set(table["ticket"])  # sample ticket
+    at.checkbox(key="ticket_only_new").check().run()
+    assert list(at.dataframe[0].value["ticket"]) == ["🆕 TCK-2009"]
